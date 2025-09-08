@@ -138,6 +138,16 @@ export class Web3Client {
     const sellFilter = this.marketplace.filters.SharesSold(null, address);
     const purchases = await this.marketplace.queryFilter(purchaseFilter, fromBlock, latest);
     const sales = await this.marketplace.queryFilter(sellFilter, fromBlock, latest);
+    // Gather unique block numbers to fetch timestamps efficiently
+    const all = [...purchases, ...sales];
+    const uniqueBlocks = Array.from(new Set(all.map(e => e.blockNumber)));
+    const blockMap = new Map();
+    for (const bn of uniqueBlocks) {
+      try {
+        const blk = await this.provider.getBlock(bn);
+        blockMap.set(bn, blk?.timestamp ? Number(blk.timestamp) * 1000 : undefined);
+      } catch {}
+    }
     for (const e of purchases) {
       events.push({
         type: 'buy',
@@ -146,7 +156,8 @@ export class Web3Client {
         amount: e.args[2]?.toString(),
         price: e.args[3]?.toString(),
         txHash: e.transactionHash,
-        blockNumber: e.blockNumber
+        blockNumber: e.blockNumber,
+        timestamp: blockMap.get(e.blockNumber)
       });
     }
     for (const e of sales) {
@@ -157,7 +168,8 @@ export class Web3Client {
         amount: e.args[2]?.toString(),
         price: e.args[3]?.toString(),
         txHash: e.transactionHash,
-        blockNumber: e.blockNumber
+        blockNumber: e.blockNumber,
+        timestamp: blockMap.get(e.blockNumber)
       });
     }
     // sort by blockNumber desc
