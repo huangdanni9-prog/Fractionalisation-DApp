@@ -1,37 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import './AboutUs.css';
+import AppHeader from './components/AppHeader';
 
-function Header({ user }) {
-  const navigate = useNavigate();
-  const handleLogin = () => navigate('/login');
-  const handleLogout = () => {
-    localStorage.removeItem('currentUser');
-    navigate('/');
-    window.location.reload();
-  };
-  return (
-    <header className="header">
-      <div className="logo">RealEstate dApp</div>
-      <nav className="nav">
-        <Link to="/" className="nav-link">Home</Link>
-        <Link to="/marketplace" className="nav-link">Marketplace</Link>
-        {user && !user.isAdmin && (
-          <Link to="/profile" className="nav-link">Profile</Link>
-        )}
-        {user && user.isAdmin && (
-          <Link to="/admin" className="nav-link">Admin</Link>
-        )}
-        <Link to="/about_us" className="nav-link">About Us</Link>
-        {!user ? (
-          <button className="btn-login" onClick={handleLogin}>Login</button>
-        ) : (
-          <button className="btn-login" onClick={handleLogout}>Logout</button>
-        )}
-      </nav>
-    </header>
-  );
-}
+// Header replaced by shared AppHeader
 
 function Footer() {
   return (
@@ -49,7 +21,7 @@ export default function AboutUs() {
   }, []);
   return (
     <div className="aboutus-root">
-      <Header user={user} />
+  <AppHeader user={user} />
       <main>
         <div className="about-container">
           <img src="https://images.unsplash.com/photo-1465101046530-73398c7f28ca?auto=format&fit=crop&w=700&q=80" alt="Our Team" className="about-img" />
