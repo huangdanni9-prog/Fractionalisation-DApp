@@ -22,16 +22,20 @@ const Profile = () => {
       return;
     }
     setUser(JSON.parse(userStr));
-    const props = JSON.parse(localStorage.getItem('properties') || '[]');
-    setOwnership(JSON.parse(localStorage.getItem('ownership') || '[]'));
-    setProperties(props);
+  const props = JSON.parse(localStorage.getItem('properties') || '[]');
+  const archivedIds = JSON.parse(localStorage.getItem('archivedPropertyIds') || '[]');
+  const filteredProps = (props || []).filter(p => !p.archivedLocal && !archivedIds.includes(p.id) && (p.active === undefined || p.active));
+  setOwnership(JSON.parse(localStorage.getItem('ownership') || '[]'));
+  setProperties(filteredProps);
     setTransactions(JSON.parse(localStorage.getItem('transactions') || '[]'));
     (async () => {
       try {
         const { account } = await web3Client.connect();
-        const chainProps = await web3Client.getProperties(0, 50);
-        if (chainProps && chainProps.length) setProperties(chainProps);
-        const holdings = await web3Client.getHoldings(account, chainProps.length ? chainProps : props);
+  const chainPropsAll = await web3Client.getProperties(0, 50);
+  const archivedIds2 = JSON.parse(localStorage.getItem('archivedPropertyIds') || '[]');
+  const chainProps = (chainPropsAll || []).filter(cp => cp.active && !archivedIds2.includes(cp.id));
+  if (chainProps && chainProps.length) setProperties(chainProps);
+  const holdings = await web3Client.getHoldings(account, chainProps.length ? chainProps : filteredProps);
         setOnchainHoldings(holdings);
         const tx = await web3Client.getUserTransactions(account);
         setOnchainTx(tx);

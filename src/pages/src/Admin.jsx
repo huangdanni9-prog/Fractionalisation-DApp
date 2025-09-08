@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import './Admin.css';
 import { web3Client } from './web3/client';
+import AppHeader from './components/AppHeader';
 import { ethers } from 'ethers';
 
 const Admin = () => {
@@ -10,6 +11,7 @@ const Admin = () => {
   const [properties, setProperties] = useState([]);
   const [trades, setTrades] = useState([]);
   const [users, setUsers] = useState([]);
+  const [web3Info, setWeb3Info] = useState({ account: null, chainId: null, error: null });
   const [form, setForm] = useState({
     title: '', address: '', rentalYield: '', annualReturn: '', totalShares: '', sharePrice: '', image: ''
   });
@@ -18,6 +20,20 @@ const Admin = () => {
   const [previewImg, setPreviewImg] = useState('');
   const [divForm, setDivForm] = useState({ propertyId: '', amountEth: '' });
   const [divMsg, setDivMsg] = useState('');
+  
+  const handleClearLocalDrafts = () => {
+    if (!window.confirm('Clear local drafts (entries without on-chain tokens)? This cannot be undone.')) return;
+    const localProps = JSON.parse(localStorage.getItem('properties') || '[]');
+    const keep = (localProps || []).filter(p => (p.tokenAddress || p.onchainId));
+    const keepIds = new Set(keep.map(p => p.id));
+    const archivedIds = JSON.parse(localStorage.getItem('archivedPropertyIds') || '[]');
+    const cleanedArchivedIds = (archivedIds || []).filter(id => keepIds.has(id));
+    localStorage.setItem('archivedPropertyIds', JSON.stringify(cleanedArchivedIds));
+    localStorage.setItem('properties', JSON.stringify(keep));
+    setProperties(keep.filter(p => !p.archivedLocal));
+    setDeleteMsg('Cleared local drafts.');
+    setTimeout(() => setDeleteMsg(''), 2500);
+  };
 
   useEffect(() => {
     const userStr = localStorage.getItem('currentUser');
@@ -33,9 +49,56 @@ const Admin = () => {
       return;
     }
     setUser(u);
-    setProperties(JSON.parse(localStorage.getItem('properties') || '[]'));
+  const localProps = JSON.parse(localStorage.getItem('properties') || '[]');
+  const archivedIds = JSON.parse(localStorage.getItem('archivedPropertyIds') || '[]');
+  // Only show on-chain backed items on initial paint; hide local-only drafts
+  setProperties(
+    localProps.filter(p => !p.archivedLocal && !archivedIds.includes(p.id) && (p.tokenAddress || p.onchainId))
+  );
     setTrades(JSON.parse(localStorage.getItem('trades') || '[]'));
     setUsers(JSON.parse(localStorage.getItem('users') || '[]'));
+
+    // Initialize wallet connection (non-blocking)
+    (async () => {
+      try {
+        const info = await web3Client.connect();
+        setWeb3Info({ account: info.account, chainId: info.chainId, error: null });
+        // After connecting, try loading properties from the chain and merge with local metadata
+        try {
+          const chainPropsRaw = await web3Client.getProperties(0, 200);
+          const isZero = (a) => !a || /^0x0{40}$/i.test(a);
+          const chainProps = chainPropsRaw.filter(cp => cp.active && !isZero(cp.tokenAddress || cp.token) && Number(cp.totalShares || 0) > 0);
+          const archived = localProps.filter(lp => lp.archivedLocal);
+          // Merge: prefer local UI metadata (title/address/image) if present
+          const merged = chainProps.map(cp => {
+            const lp = localProps.find(x => x.id === cp.id);
+            return {
+              id: cp.id,
+              tokenAddress: cp.tokenAddress || cp.token,
+              onchainId: cp.id,
+              totalShares: cp.totalShares,
+              availableShares: cp.availableShares ?? lp?.availableShares ?? cp.totalShares,
+              sharePrice: cp.sharePrice, // already in ETH from client
+              active: cp.active,
+              metadataURI: cp.metadataURI,
+              archivedLocal: lp?.archivedLocal || false,
+              // UI fields from local if available
+              title: lp?.title || `Property #${cp.id}`,
+              address: lp?.address || '',
+              image: lp?.image || '',
+              rentalYield: lp?.rentalYield ?? '',
+              annualReturn: lp?.annualReturn ?? ''
+            };
+          }).filter(p => !p.archivedLocal);
+          // Exclude local-only drafts by default to avoid phantom items unless explicitly needed
+          const allActive = [...merged];
+          setProperties(allActive);
+          localStorage.setItem('properties', JSON.stringify([...allActive, ...archived]));
+        } catch {}
+      } catch (e) {
+        setWeb3Info({ account: null, chainId: null, error: e?.message || String(e) });
+      }
+    })();
   }, [navigate]);
 
   // Property creation
@@ -56,22 +119,7 @@ const Admin = () => {
       setPropMsg('Complete all fields and upload image.');
       return;
     }
-    const props = [...properties];
-    const id = props.length ? Math.max(...props.map(p => p.id)) + 1 : 1;
-    const p = {
-      id,
-      title,
-      address,
-      image,
-      rentalYield: Number(rentalYield),
-      annualReturn: Number(annualReturn),
-      totalShares: Number(totalShares),
-      availableShares: Number(totalShares),
-      sharePrice: Number(sharePrice)
-    };
-    props.push(p);
-    localStorage.setItem('properties', JSON.stringify(props));
-    setProperties(props);
+  // Defer adding to local list until on-chain create confirms; still keep a local draft id if needed
     // On-chain create fractional token + registry entry
     try {
       await web3Client.connect();
@@ -94,12 +142,29 @@ const Admin = () => {
       console.log('createProperty', { receipt, propertyId, token });
       if (propertyId !== undefined && token) {
         setPropMsg(`Created on-chain: #${propertyId} token ${token.slice(0,6)}...${token.slice(-4)}`);
-        // Optional: store on the local item so the Admin list shows token
-        const updated = props.map(x => x.id === id ? { ...x, tokenAddress: token, onchainId: propertyId } : x);
-        localStorage.setItem('properties', JSON.stringify(updated));
-        setProperties(updated);
-        // Clear local fallback to force Marketplace to load from chain
-        localStorage.removeItem('properties');
+        // Reload from chain and merge with UI metadata for the created property
+        const chainProps = await web3Client.getProperties(0, 200);
+        const merged = chainProps.map(cp => {
+          const isNew = Number(cp.id) === Number(propertyId);
+          const lp = isNew ? { title, address, image, rentalYield: Number(rentalYield), annualReturn: Number(annualReturn) } : (properties.find(x => x.id === cp.id) || {});
+          return {
+            id: cp.id,
+            tokenAddress: cp.tokenAddress || cp.token,
+            onchainId: cp.id,
+            totalShares: cp.totalShares,
+            availableShares: cp.availableShares ?? lp?.availableShares ?? cp.totalShares,
+            sharePrice: cp.sharePrice,
+            active: cp.active,
+            metadataURI: cp.metadataURI,
+            title: lp?.title || `Property #${cp.id}`,
+            address: lp?.address || '',
+            image: lp?.image || '',
+            rentalYield: lp?.rentalYield ?? '',
+            annualReturn: lp?.annualReturn ?? ''
+          };
+        });
+        setProperties(merged);
+        localStorage.setItem('properties', JSON.stringify(merged));
       } else {
         setPropMsg('On-chain create confirmed, but event not parsed.');
       }
@@ -110,20 +175,127 @@ const Admin = () => {
     }
     setForm({ title: '', address: '', rentalYield: '', annualReturn: '', totalShares: '', sharePrice: '', image: '' });
     setPreviewImg('');
-    // Small delay to let the node index the event
-    setTimeout(() => navigate('/marketplace'), 600);
+  // Small delay to let the node index the event, then go marketplace
+  setTimeout(() => navigate('/marketplace'), 600);
   };
 
   // Property deletion
-  const handleDeleteProperty = id => {
-    const props = [...properties];
-    const idx = props.findIndex(p => p.id === id);
-    if (idx === -1) return;
-    const propTitle = props[idx].title;
-    props.splice(idx, 1);
-    localStorage.setItem('properties', JSON.stringify(props));
-    setProperties(props);
+  const handleDeleteProperty = async (id) => {
+    const localProps = JSON.parse(localStorage.getItem('properties') || '[]');
+  const archivedIds = JSON.parse(localStorage.getItem('archivedPropertyIds') || '[]');
+    const idxLocal = localProps.findIndex(p => p.id === id);
+    const propTitle = idxLocal !== -1 ? (localProps[idxLocal].title || `Property #${id}`) : `Property #${id}`;
+
+    // Optimistic UI: remove from current state
+    setProperties(prev => prev.filter(p => p.id !== id));
+
+    // Try on-chain deactivate
+    let onchainDeactivated = false;
+    try {
+      await web3Client.connect();
+      await web3Client.setPropertyActive(id, false);
+      onchainDeactivated = true;
+    } catch (e) {
+      console.warn('On-chain deactivate failed; archiving locally instead.', e?.reason || e?.message || e);
+    }
+
+    // Update localStorage: mark archivedLocal if on-chain deactivate not possible; otherwise keep removed
+    let updated = [...localProps];
+    if (idxLocal !== -1) {
+      if (onchainDeactivated) {
+        // keep record but mark not archived; it will be excluded by chain active filter on next merge
+        updated[idxLocal] = { ...updated[idxLocal], archivedLocal: false };
+      } else {
+        updated[idxLocal] = { ...updated[idxLocal], archivedLocal: true };
+      }
+    }
+
+    // Persist archived id (so other pages also hide it)
+    const newArchivedIds = Array.from(new Set([ ...archivedIds, id ]));
+    localStorage.setItem('archivedPropertyIds', JSON.stringify(newArchivedIds));
+
+    // Refresh from chain (active only) and merge UI metadata; then append archived entries to storage
+    try {
+      const chainPropsRaw = await web3Client.getProperties(0, 200);
+      const chainProps = chainPropsRaw.filter(cp => cp.active && !newArchivedIds.includes(cp.id));
+      const archived = updated.filter(lp => lp.archivedLocal);
+      const merged = chainProps.map(cp => {
+        const lp = updated.find(x => x.id === cp.id);
+        const out = {
+          id: cp.id,
+          tokenAddress: cp.tokenAddress || cp.token,
+          onchainId: cp.id,
+          totalShares: cp.totalShares,
+          availableShares: cp.availableShares ?? lp?.availableShares ?? cp.totalShares,
+          sharePrice: cp.sharePrice,
+          active: cp.active,
+          metadataURI: cp.metadataURI,
+          archivedLocal: lp?.archivedLocal || false,
+          title: lp?.title || `Property #${cp.id}`,
+          address: lp?.address || '',
+          image: lp?.image || '',
+          rentalYield: lp?.rentalYield ?? '',
+          annualReturn: lp?.annualReturn ?? ''
+        };
+        return out;
+      }).filter(p => !p.archivedLocal);
+      localStorage.setItem('properties', JSON.stringify([...merged, ...archived]));
+      setProperties(merged);
+    } catch {
+      localStorage.setItem('properties', JSON.stringify(updated));
+    }
+
     setDeleteMsg(`Property "${propTitle}" deleted.`);
+  };
+
+  const handleRestoreProperty = async (id) => {
+    const localProps = JSON.parse(localStorage.getItem('properties') || '[]');
+  const archivedIds = JSON.parse(localStorage.getItem('archivedPropertyIds') || '[]');
+    const idx = localProps.findIndex(p => p.id === id);
+    if (idx === -1) return;
+    const propTitle = localProps[idx].title || `Property #${id}`;
+    // Un-archive locally first
+    localProps[idx] = { ...localProps[idx], archivedLocal: false };
+    localStorage.setItem('properties', JSON.stringify(localProps));
+  // Remove from archived ids set
+  localStorage.setItem('archivedPropertyIds', JSON.stringify((archivedIds || []).filter(x => x !== id)));
+    // Try to re-activate on-chain
+    try {
+      await web3Client.connect();
+      await web3Client.setPropertyActive(id, true);
+    } catch (e) {
+      console.warn('On-chain restore failed (showing locally).', e?.reason || e?.message || e);
+    }
+    // Refresh properties view
+    try {
+  const chainPropsRaw = await web3Client.getProperties(0, 200);
+  const archivedIds2 = JSON.parse(localStorage.getItem('archivedPropertyIds') || '[]');
+  const chainProps = chainPropsRaw.filter(cp => cp.active && !archivedIds2.includes(cp.id));
+      const updated = JSON.parse(localStorage.getItem('properties') || '[]');
+      const archived = updated.filter(lp => lp.archivedLocal);
+      const merged = chainProps.map(cp => {
+        const lp = updated.find(x => x.id === cp.id);
+        return {
+          id: cp.id,
+          tokenAddress: cp.tokenAddress || cp.token,
+          onchainId: cp.id,
+          totalShares: cp.totalShares,
+          availableShares: cp.availableShares ?? lp?.availableShares ?? cp.totalShares,
+          sharePrice: cp.sharePrice,
+          active: cp.active,
+          metadataURI: cp.metadataURI,
+          archivedLocal: lp?.archivedLocal || false,
+          title: lp?.title || `Property #${cp.id}`,
+          address: lp?.address || '',
+          image: lp?.image || '',
+          rentalYield: lp?.rentalYield ?? '',
+          annualReturn: lp?.annualReturn ?? ''
+        };
+      }).filter(p => !p.archivedLocal);
+      localStorage.setItem('properties', JSON.stringify([...merged, ...archived]));
+      setProperties(merged);
+      setDeleteMsg(`Property "${propTitle}" restored.`);
+    } catch {}
   };
 
   // Deposit dividends on-chain
@@ -183,27 +355,7 @@ const Admin = () => {
 
   return (
     <div className="admin-root">
-      <header className="admin-header">
-        <div className="logo">RealEstate dApp</div>
-        <nav className="nav">
-          <Link to="/" className="nav-link">Home</Link>
-          <Link to="/marketplace" className="nav-link">Marketplace</Link>
-          {/* Only show Profile link for non-admin users */}
-          {/* <Link to="/profile" className="nav-link">Profile</Link> */}
-          {user && user.isAdmin && (
-            <Link to="/admin" className="nav-link">Admin</Link>
-          )}
-          <Link to="/about_us" className="nav-link">About Us</Link>
-          {user ? (
-            <button className="btn-login" onClick={() => {
-              localStorage.removeItem('currentUser');
-              navigate('/');
-            }}>Logout</button>
-          ) : (
-            <Link to="/login" className="btn-login">Login</Link>
-          )}
-        </nav>
-      </header>
+      <AppHeader user={user} />
       <main>
         <div className="container">
           <div className="admin-container">
@@ -228,6 +380,9 @@ const Admin = () => {
             </div>
             <div className="card">
               <h3>Delete Property</h3>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10 }}>
+                <button className="btn" style={{ background: '#6b7280' }} onClick={handleClearLocalDrafts}>Clear local drafts</button>
+              </div>
               <div>
                 {properties.length === 0 ? (
                   <div>No properties available.</div>
@@ -245,6 +400,26 @@ const Admin = () => {
                 )}
               </div>
               <div className="small">{deleteMsg}</div>
+            </div>
+            {/* Archived section */}
+            <div className="card">
+              <h3>Archived Properties</h3>
+              <div>
+                {(() => {
+                  const archived = (JSON.parse(localStorage.getItem('properties') || '[]') || []).filter(p => p.archivedLocal);
+                  if (archived.length === 0) return <div>No archived properties.</div>;
+                  return archived.map(p => (
+                    <div key={`arch-${p.id}`} style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 12, background: '#fff', padding: 10, borderRadius: 8, boxShadow: '0 1px 6px rgba(70,54,227,0.07)' }}>
+                      <img src={p.image} alt={p.title} style={{ width: 60, height: 60, objectFit: 'cover', borderRadius: 8 }} />
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: 600, color: '#4636e3' }}>{p.title || `Property #${p.id}`}</div>
+                        <div style={{ fontSize: '0.98rem', color: '#444' }}>{p.address || ''}</div>
+                      </div>
+                      <button className="btn" style={{ background: '#10b981' }} onClick={() => handleRestoreProperty(p.id)}>Restore</button>
+                    </div>
+                  ));
+                })()}
+              </div>
             </div>
             <div className="card">
               <h3>Trading History</h3>

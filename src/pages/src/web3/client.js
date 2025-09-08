@@ -13,17 +13,68 @@ export class Web3Client {
   this.marketplaceIface = null;
   }
 
+  async ensureLocalhostNetwork() {
+    if (!window.ethereum) throw new Error('MetaMask not found');
+    // Hardhat localhost chainId in hex
+    const target = '0x7a69'; // 31337
+    const current = await window.ethereum.request({ method: 'eth_chainId' });
+    if (current !== target) {
+      try {
+        await window.ethereum.request({
+          method: 'wallet_switchEthereumChain',
+          params: [{ chainId: target }],
+        });
+      } catch (err) {
+        if (err && err.code === 4902) {
+          // Chain not added — add it
+          await window.ethereum.request({
+            method: 'wallet_addEthereumChain',
+            params: [{
+              chainId: target,
+              chainName: 'Localhost 8545',
+              rpcUrls: ['http://127.0.0.1:8545'],
+              nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
+            }],
+          });
+        } else {
+          throw err;
+        }
+      }
+    }
+  }
+
   async connect() {
     if (!window.ethereum) throw new Error('No wallet');
+    // Prefer localhost for development; auto-switch MetaMask
+    try { await this.ensureLocalhostNetwork(); } catch (e) { /* non-fatal: continue if user rejects */ }
     await window.ethereum.request({ method: 'eth_requestAccounts' });
     this.provider = new ethers.BrowserProvider(window.ethereum);
     this.signer = await this.provider.getSigner();
     const net = await this.provider.getNetwork();
-    const chainName = net.chainId === 11155111n ? 'sepolia' : 'local';
-    const cfg = networks[chainName];
-  this.registry = new ethers.Contract(cfg.registry, registryAbi, this.signer);
-  this.marketplace = new ethers.Contract(cfg.marketplace, marketplaceAbi, this.signer);
-  this.marketplaceIface = new ethers.Interface(marketplaceAbi);
+    // Decide address set by chainId
+    let chainName;
+    if (net.chainId === 11155111n) chainName = 'sepolia';
+    else if (net.chainId === 31337n) chainName = 'local';
+    else chainName = 'local'; // fallback to local for dev
+    const cfg = networks[chainName] || {};
+    if (!cfg.registry || !cfg.marketplace) throw new Error(`Missing addresses for chain '${chainName}'`);
+
+    // Instantiate contracts
+    this.registry = new ethers.Contract(cfg.registry, registryAbi, this.signer);
+    this.marketplace = new ethers.Contract(cfg.marketplace, marketplaceAbi, this.signer);
+    this.marketplaceIface = new ethers.Interface(marketplaceAbi);
+
+    // Basic sanity: ensure code exists at marketplace address
+    const code = await this.provider.getCode(cfg.marketplace);
+    if (code === '0x') throw new Error('Marketplace not deployed on this network (no code at address)');
+
+    // Reactivity: refresh on chain or account changes to avoid stale state
+    try {
+      window.ethereum.removeAllListeners?.('chainChanged');
+      window.ethereum.removeAllListeners?.('accountsChanged');
+      window.ethereum.on('chainChanged', () => window.location.reload());
+      window.ethereum.on('accountsChanged', () => window.location.reload());
+    } catch {}
     return { account: await this.signer.getAddress(), chainId: net.chainId.toString() };
   }
 
@@ -41,13 +92,29 @@ export class Web3Client {
     if (!this.registry) await this.connect();
     try {
       const arr = await this.registry.getAllProperties(start, count);
+      const erc20Abi = [
+        { "inputs": [{"internalType":"address","name":"account","type":"address"}], "name":"balanceOf", "outputs":[{"internalType":"uint256","name":"","type":"uint256"}], "stateMutability":"view", "type":"function" },
+        { "inputs": [], "name": "totalSupply", "outputs": [ { "internalType": "uint256", "name": "", "type": "uint256" } ], "stateMutability": "view", "type": "function" }
+      ];
+      // Parallel fetch availableShares by checking token balance of propertyOwner
+      const balances = await Promise.all(arr.map(async (p) => {
+        try {
+          const c = new ethers.Contract(p.fractionalToken, erc20Abi, this.provider);
+          const bal = await c.balanceOf(p.propertyOwner);
+          return Number(bal);
+        } catch {
+          return undefined;
+        }
+      }));
       return arr.map((p, idx) => ({
         id: start + idx,
         metadataURI: p.metadataURI,
         token: p.fractionalToken,
-        totalShares: Number(p.totalShares),
-        sharePrice: Number(ethers.formatEther(p.sharePriceWei || 0n)),
         tokenAddress: p.fractionalToken,
+        propertyOwner: p.propertyOwner,
+        totalShares: Number(p.totalShares),
+        availableShares: balances[idx] !== undefined ? balances[idx] : Number(p.totalShares),
+        sharePrice: Number(ethers.formatEther(p.sharePriceWei || 0n)),
         active: p.active
       }));
     } catch (e) {
@@ -77,6 +144,12 @@ export class Web3Client {
       }
     }
     return results;
+  }
+
+  async setPropertyActive(propertyId, active) {
+    if (!this.registry) await this.connect();
+    const tx = await this.registry.setPropertyActive(Number(propertyId), Boolean(active));
+    return tx.wait();
   }
 
   // Admin

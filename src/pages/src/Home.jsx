@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import './Home.css';
+import AppHeader from './components/AppHeader';
 
 const propertyImages = [
   'https://images.unsplash.com/photo-1507089947368-19c1da9775ae?auto=format&fit=crop&w=400&q=80',
@@ -14,36 +15,7 @@ const propertyImages = [
   'https://images.unsplash.com/photo-1523217582562-09d0def993a6?auto=format&fit=crop&w=400&q=80',
 ];
 
-function Header({ user }) {
-  const navigate = useNavigate();
-  const handleLogin = () => navigate('/login');
-  const handleLogout = () => {
-    localStorage.removeItem('currentUser');
-    navigate('/');
-    window.location.reload();
-  };
-  return (
-    <header className="header">
-      <div className="logo">RealEstate dApp</div>
-      <nav className="nav">
-        <Link to="/" className="nav-link">Home</Link>
-        <Link to="/marketplace" className="nav-link">Marketplace</Link>
-        {user && !user.isAdmin && (
-          <Link to="/profile" className="nav-link">Profile</Link>
-        )}
-        {user && user.isAdmin && (
-          <Link to="/admin" className="nav-link">Admin</Link>
-        )}
-        <Link to="/about_us" className="nav-link">About Us</Link>
-        {!user ? (
-          <button className="btn-login" onClick={handleLogin}>Login</button>
-        ) : (
-          <button className="btn-login" onClick={handleLogout}>Logout</button>
-        )}
-      </nav>
-    </header>
-  );
-}
+// Header replaced by shared AppHeader
 
 function Hero() {
   return (
@@ -65,13 +37,13 @@ function TopProperties() {
   const [properties, setProperties] = useState([]);
 
   useEffect(() => {
-    const props = JSON.parse(localStorage.getItem('properties') || '[]');
-    if (!props || props.length === 0) {
-      setProperties([]);
-    } else {
-      const sorted = [...props].sort((a, b) => (b.rentalYield + b.annualReturn) - (a.rentalYield + a.annualReturn));
-      setProperties(sorted.slice(0, 3));
-    }
+  const props = JSON.parse(localStorage.getItem('properties') || '[]') || [];
+  const archivedIds = JSON.parse(localStorage.getItem('archivedPropertyIds') || '[]');
+  // Exclude locally archived, globally archived, and inactive items if active flag exists
+  const active = props.filter(p => !p.archivedLocal && !archivedIds.includes(p.id) && (p.active === undefined || p.active));
+  if (active.length === 0) return setProperties([]);
+  const sorted = [...active].sort((a, b) => (Number(b.rentalYield || 0) + Number(b.annualReturn || 0)) - (Number(a.rentalYield || 0) + Number(a.annualReturn || 0)));
+  setProperties(sorted.slice(0, 3));
   }, []);
 
   if (!properties.length) {
@@ -81,7 +53,7 @@ function TopProperties() {
   return (
     <div className="top-properties">
       {properties.map((p, i) => (
-        <div className="product-card" key={i}>
+  <Link to={`/property/${p.id}`} className="product-card" key={i}>
           <img src={p.image} alt={p.title} className="product-img" />
           <div className="product-info">
             <div>
@@ -94,7 +66,7 @@ function TopProperties() {
             </div>
           </div>
           <div className="product-availability">Available: {p.availableShares} shares at {p.sharePrice} ETH</div>
-        </div>
+  </Link>
       ))}
     </div>
   );
@@ -163,7 +135,7 @@ export default function Home() {
   }, []);
   return (
     <div className="home-root">
-      <Header user={user} />
+  <AppHeader user={user} />
       <Hero />
       <main className="main">
         <h1>Welcome to Real Estate Fractionalization dApp</h1>
