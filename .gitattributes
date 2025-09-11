@@ -1,0 +1,14 @@
+# Normalize all text files to LF in repo; Windows will checkout as CRLF if core.autocrlf=true
+* text=auto eol=lf
+
+# Keep images/binary untouched
+*.png -text
+*.jpg -text
+*.jpeg -text
+*.gif -text
+*.webp -text
+*.svg -text
+*.pdf -text
+
+# Do not treat DB/leveldb files as text
+contracts/ganache-db/* -text

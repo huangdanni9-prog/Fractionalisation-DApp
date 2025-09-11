@@ -6,6 +6,8 @@ export default function HeroGallery({ images, alt, className = '' }) {
   const [idx, setIdx] = useState(0);
   const total = images?.length || 0;
   const containerRef = useRef(null);
+  const touchStart = useRef(null);
+  const timerRef = useRef(null);
 
   useEffect(() => {
     const onKey = (e) => {
@@ -19,6 +21,32 @@ export default function HeroGallery({ images, alt, className = '' }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [total]);
 
+  // Auto-advance every 5s
+  useEffect(() => {
+    if (!total || total < 2) return;
+    timerRef.current = setInterval(() => setIdx((i) => (i + 1) % total), 5000);
+    return () => clearInterval(timerRef.current);
+  }, [total]);
+
+  // Touch swipe
+  const onTouchStart = (e) => {
+    const t = e.touches?.[0];
+    if (!t) return;
+    touchStart.current = { x: t.clientX, y: t.clientY };
+  };
+  const onTouchEnd = (e) => {
+    const start = touchStart.current;
+    touchStart.current = null;
+    if (!start) return;
+    const t = e.changedTouches?.[0];
+    if (!t) return;
+    const dx = t.clientX - start.x;
+    const dy = t.clientY - start.y;
+    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 30) {
+      setIdx((i) => (dx > 0 ? (i - 1 + total) % total : (i + 1) % total));
+    }
+  };
+
   if (!images || images.length === 0) return null;
 
   return (
@@ -27,6 +55,8 @@ export default function HeroGallery({ images, alt, className = '' }) {
       className={`relative w-full overflow-hidden rounded-xl ${className}`}
       aria-roledescription="carousel"
       aria-label="Property photo gallery"
+      onTouchStart={onTouchStart}
+      onTouchEnd={onTouchEnd}
     >
       <img
         src={images[idx]}

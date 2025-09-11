@@ -28,6 +28,8 @@ contract PropertyRegistry is Ownable {
 
     event PropertyCreated(uint256 indexed propertyId, address indexed token, uint256 totalShares, uint256 sharePriceWei, address owner, string metadataURI);
     event PropertyStatusChanged(uint256 indexed propertyId, bool active);
+    event PropertyMetadataUpdated(uint256 indexed propertyId, string metadataURI);
+    event PropertySharePriceUpdated(uint256 indexed propertyId, uint256 sharePriceWei);
 
     constructor(address initialOwner) Ownable(initialOwner) {}
 
@@ -56,6 +58,18 @@ contract PropertyRegistry is Ownable {
         require(properties[propertyId].fractionalToken != address(0), "NO_PROPERTY");
         properties[propertyId].active = active;
         emit PropertyStatusChanged(propertyId, active);
+    }
+
+    function updatePropertyMetadataURI(uint256 propertyId, string calldata metadataURI) external onlyOwner {
+        require(properties[propertyId].fractionalToken != address(0), "NO_PROPERTY");
+        properties[propertyId].metadataURI = metadataURI;
+        emit PropertyMetadataUpdated(propertyId, metadataURI);
+    }
+
+    function updatePropertySharePrice(uint256 propertyId, uint256 sharePriceWei) external onlyOwner {
+        require(properties[propertyId].fractionalToken != address(0), "NO_PROPERTY");
+        properties[propertyId].sharePriceWei = sharePriceWei;
+        emit PropertySharePriceUpdated(propertyId, sharePriceWei);
     }
 
     function getProperty(uint256 propertyId) external view returns (Property memory) {

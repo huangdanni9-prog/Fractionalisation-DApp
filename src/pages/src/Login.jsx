@@ -2,19 +2,15 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import './Login.css';
+import { web3Client } from './web3/client';
 
-// MetaMask connection helper
+// MetaMask connection helper via centralized web3Client
 const connectMetaMask = async () => {
-  if (window.ethereum) {
-    try {
-      const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
-      return accounts[0];
-    } catch (error) {
-      alert('MetaMask connection failed.');
-      return null;
-    }
-  } else {
-    alert('MetaMask not detected. Please install MetaMask.');
+  try {
+    const res = await web3Client.connect();
+    return res?.account;
+  } catch (error) {
+    alert(error?.message || 'MetaMask connection failed.');
     return null;
   }
 };
@@ -45,7 +41,7 @@ export default function Login() {
     if (address) {
       setUserAddress(address);
       setShowAdmin(false);
-      localStorage.setItem('currentUser', JSON.stringify({ address, isAdmin: false }));
+  localStorage.setItem('currentUser', JSON.stringify({ address, isAdmin: false, type: 'wallet' }));
       navigate('/');
     }
   };
@@ -57,7 +53,7 @@ export default function Login() {
       alert('Invalid credentials.');
       return;
     }
-    localStorage.setItem('currentUser', JSON.stringify(u));
+  localStorage.setItem('currentUser', JSON.stringify({ ...u, type: 'admin' }));
     navigate('/');
   };
 

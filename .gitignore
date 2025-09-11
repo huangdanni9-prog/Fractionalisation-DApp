@@ -36,6 +36,8 @@ cache/
 typechain-types/
 coverage.json
 
+
+
 # Framework providers (optional)
 .next/
 .vercel/

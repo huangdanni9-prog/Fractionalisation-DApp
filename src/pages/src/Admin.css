@@ -60,16 +60,36 @@
   font-size: 18px;
 }
 
+/* Align the main admin content to the same centered column as cards */
+.admin-root .admin-container {
+  width: 96%;
+  max-width: 1300px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Make the welcome text align with cards and not look out of place */
+.admin-root .admin-desc {
+  width: 96%;
+  max-width: 1300px;
+  margin: 0 auto 16px;
+  color: #444;
+  line-height: 1.5;
+  background: #ffffff;
+  padding: 16px 20px;
+  border-radius: 12px;
+  border-left: 4px solid #4636e3;
+  box-shadow: 0 2px 10px rgba(70,54,227,0.06);
+}
+
 .admin-root .admin-container .card {
   background: #f6f5ff;
   padding: 24px;
   border-radius: 14px;
   box-shadow: 0 2px 12px rgba(70,54,227,0.07);
-  margin-bottom: 32px;
+  margin: 0 auto 32px;
   width: 96%;
   max-width: 1300px;
-  margin-left: auto;
-  margin-right: auto;
 }
 
 .admin-root button:hover {
@@ -101,6 +121,38 @@
   border: 1px solid #e6eefc;
   background: #fff;
 }
+
+/* Unified buttons */
+.admin-root .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border-radius: 10px;
+  border: none;
+  cursor: pointer;
+  font-weight: 600;
+  color: #ffffff;
+  background: #4636e3; /* primary */
+  transition: background 0.15s ease, box-shadow 0.15s ease, transform 0.02s ease;
+  box-shadow: 0 2px 10px rgba(70,54,227,0.15);
+}
+.admin-root .btn:hover { background: #0b63ff; box-shadow: 0 4px 14px rgba(70,54,227,0.18); }
+.admin-root .btn:active { transform: translateY(1px); }
+.admin-root .btn:disabled { opacity: 0.6; cursor: not-allowed; box-shadow: none; }
+
+.admin-root .btn-primary { background: #4636e3; }
+.admin-root .btn-primary:hover { background: #0b63ff; }
+
+.admin-root .btn-secondary { background: #6b7280; }
+.admin-root .btn-secondary:hover { background: #4b5563; }
+
+.admin-root .btn-danger { background: #e34c4c; }
+.admin-root .btn-danger:hover { background: #c03535; }
+
+.admin-root .btn-success { background: #10b981; }
+.admin-root .btn-success:hover { background: #0e966a; }
 
 .admin-root .admin-footer {
   background: #fff;

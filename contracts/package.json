@@ -1,18 +1,22 @@
 {
+  "scripts": {
+  "chain": "npx ganache --database.dbPath ./ganache-db --chain.chainId 1337 --server.port 8545 --wallet.totalAccounts 10 --wallet.defaultBalance 1000 --wallet.mnemonic 'hungry author action awake divorce journey second typical leisure lottery hunt fit'",
+    "deploy:ganache": "hardhat run scripts/deploy.js --network ganache",
+    "seed:ganache": "hardhat run scripts/seed-ganache.js --network ganache",
+  "verify:ganache": "hardhat run scripts/verify-ganache.js --network ganache",
+  "check:ganache": "hardhat run scripts/check-ganache.js --network ganache",
+  "deactivate:ganache": "cross-env PROPERTY_ID=0 hardhat run scripts/deactivate-ganache.js --network ganache",
+  "diagnose:ganache": "hardhat run scripts/diagnose-ganache.js --network ganache",
+  "check:sources": "node scripts/check-sources.js"
+  },
   "devDependencies": {
-    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
-    "dotenv": "^16.4.5",
-    "hardhat": "^2.22.5"
+    "@nomicfoundation/hardhat-ethers": "^3.1.0",
+    "ethers": "^6.13.4",
+    "hardhat": "^2.26.3",
+    "cross-env": "^7.0.3"
   },
   "dependencies": {
     "@openzeppelin/contracts": "^5.4.0",
-    "build": "^0.1.4",
-    "npm": "^11.5.2",
-    "run": "^1.5.0"
-  },
-  "scripts": {
-    "build": "hardhat compile",
-    "test": "hardhat test",
-    "deploy": "node scripts/deploy.js"
+    "dotenv": "^16.4.5"
   }
 }

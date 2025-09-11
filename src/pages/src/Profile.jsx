@@ -1,7 +1,34 @@
 import React, { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import './Profile.css';
 import { web3Client } from './web3/client';
+import { ethers } from 'ethers';
+import AppHeader from './components/AppHeader';
+
+function resolveIpfs(url) {
+  if (!url || typeof url !== 'string') return url;
+  if (url.startsWith('ipfs://')) {
+    const path = url.replace('ipfs://', '');
+    return `https://ipfs.io/ipfs/${path}`;
+  }
+  return url;
+}
+
+async function fetchJsonMaybe(uri) {
+  try {
+    const res = await fetch(resolveIpfs(uri));
+    if (!res.ok) return null;
+    return await res.json();
+  } catch { return null; }
+}
+
+function attr(obj, key) {
+  if (!obj) return undefined;
+  if (obj[key] !== undefined) return obj[key];
+  const attrs = Array.isArray(obj.attributes) ? obj.attributes : [];
+  const hit = attrs.find(a => (a.trait_type || a.type || a.key) === key || (a.trait_type || '').toLowerCase() === key.toLowerCase());
+  return hit ? (hit.value ?? hit.val ?? hit.content) : undefined;
+}
 
 const Profile = () => {
   const navigate = useNavigate();
@@ -10,9 +37,63 @@ const Profile = () => {
   const [properties, setProperties] = useState([]);
   const [transactions, setTransactions] = useState([]);
   const [dividendPools, setDividendPools] = useState([]);
+  const [pendingMap, setPendingMap] = useState({}); // propertyId -> wei
   const [dividendMsg, setDividendMsg] = useState('');
   const [onchainHoldings, setOnchainHoldings] = useState([]);
   const [onchainTx, setOnchainTx] = useState([]);
+  const [divHistory, setDivHistory] = useState([]);
+  const [editName, setEditName] = useState('');
+  const [editEmail, setEditEmail] = useState('');
+  const [editAvatar, setEditAvatar] = useState('');
+  const [saveMsg, setSaveMsg] = useState('');
+
+  const loadOnchainData = async (filteredProps) => {
+    try {
+      const { account } = await web3Client.connect();
+      const chainPropsAll = await web3Client.getProperties(0, 50);
+      const archivedIds2 = JSON.parse(localStorage.getItem('archivedPropertyIds') || '[]');
+      const chainProps = (chainPropsAll || []).filter(cp => cp.active && !archivedIds2.includes(cp.id));
+      // Enrich with metadata so we show a human-friendly title instead of data: URI
+      if (chainProps && chainProps.length) {
+  const enriched = await Promise.all(chainProps.map(async (cp) => {
+          const meta = cp.metadataURI ? await fetchJsonMaybe(cp.metadataURI) : null;
+          const title = (meta?.name || meta?.title || attr(meta, 'title') || `Property #${cp.id}`);
+          const address = (meta?.address || attr(meta, 'address') || '');
+          const image = resolveIpfs(meta?.image || attr(meta, 'image'));
+          const rentalYield = Number(attr(meta, 'rentalYield') ?? meta?.rentalYield ?? '') || '';
+          const annualReturn = Number(attr(meta, 'annualReturn') ?? meta?.annualReturn ?? '') || '';
+          return { ...cp, title, address, image, rentalYield, annualReturn };
+        }));
+        setProperties(enriched);
+      }
+  const holdings = await web3Client.getHoldings(account, chainProps.length ? chainProps : filteredProps);
+      setOnchainHoldings(holdings);
+      // Dividend history
+      try {
+        const hist = await web3Client.getDividendHistory(account, chainProps.length ? chainProps : filteredProps);
+        setDivHistory(hist);
+      } catch {}
+      // Load pending dividends per property for this account
+      try {
+        const pendEntries = await Promise.all((chainProps.length ? chainProps : filteredProps).map(async (cp) => {
+          if (!cp || (!cp.token && !cp.tokenAddress)) return [cp?.id, '0'];
+          const weiStr = await web3Client.getPendingDividends({ token: cp.token || cp.tokenAddress, propertyId: cp.id, account });
+          return [cp.id, (weiStr ?? '0')];
+        }));
+        const map = Object.fromEntries(pendEntries.filter(e => Array.isArray(e) && e[0] !== undefined));
+        setPendingMap(map);
+      } catch {}
+      const tx = await web3Client.getUserTransactions(account);
+      setOnchainTx(tx);
+      // Persist a wallet-scoped cache to avoid cross-wallet mixing
+      try {
+        const key = `tx:${(account || '').toLowerCase()}`;
+        localStorage.setItem(key, JSON.stringify(tx));
+      } catch {}
+    } catch (e) {
+      console.log('on-chain profile data not available', e);
+    }
+  };
 
   useEffect(() => {
     const userStr = localStorage.getItem('currentUser');
@@ -21,30 +102,128 @@ const Profile = () => {
       navigate('/login');
       return;
     }
-    setUser(JSON.parse(userStr));
+    const parsed = JSON.parse(userStr);
+    // If wallet-based user, hydrate fields from profiles[address]
+    let name = parsed?.name || '';
+    let email = parsed?.email || '';
+    let avatar = parsed?.avatar || '';
+    try {
+      if (parsed?.address) {
+        const profiles = JSON.parse(localStorage.getItem('profiles') || '{}');
+        const prof = profiles[(parsed.address || '').toLowerCase()] || {};
+        name = prof.name || name;
+        email = prof.email || email;
+        avatar = prof.avatar || avatar;
+        parsed.name = name; parsed.email = email; parsed.avatar = avatar;
+        localStorage.setItem('currentUser', JSON.stringify(parsed));
+      }
+    } catch {}
+    setUser(parsed);
+    setEditName(name);
+    setEditEmail(email);
+    setEditAvatar(avatar);
   const props = JSON.parse(localStorage.getItem('properties') || '[]');
   const archivedIds = JSON.parse(localStorage.getItem('archivedPropertyIds') || '[]');
   const filteredProps = (props || []).filter(p => !p.archivedLocal && !archivedIds.includes(p.id) && (p.active === undefined || p.active));
   setOwnership(JSON.parse(localStorage.getItem('ownership') || '[]'));
   setProperties(filteredProps);
-    setTransactions(JSON.parse(localStorage.getItem('transactions') || '[]'));
-    (async () => {
-      try {
-        const { account } = await web3Client.connect();
-  const chainPropsAll = await web3Client.getProperties(0, 50);
-  const archivedIds2 = JSON.parse(localStorage.getItem('archivedPropertyIds') || '[]');
-  const chainProps = (chainPropsAll || []).filter(cp => cp.active && !archivedIds2.includes(cp.id));
-  if (chainProps && chainProps.length) setProperties(chainProps);
-  const holdings = await web3Client.getHoldings(account, chainProps.length ? chainProps : filteredProps);
-        setOnchainHoldings(holdings);
-        const tx = await web3Client.getUserTransactions(account);
-        setOnchainTx(tx);
-      } catch (e) {
-        console.log('on-chain profile data not available', e);
+    // Load wallet-scoped cached tx if present; else fallback to legacy global tx for non-wallet users
+    try {
+      if (parsed?.address) {
+        const key = `tx:${(parsed.address || '').toLowerCase()}`;
+        const cached = JSON.parse(localStorage.getItem(key) || '[]');
+        if (Array.isArray(cached) && cached.length) setOnchainTx(cached);
       }
-    })();
+    } catch {}
+    setTransactions(JSON.parse(localStorage.getItem('transactions') || '[]'));
+    loadOnchainData(filteredProps);
     setDividendPools(JSON.parse(localStorage.getItem('dividendPools') || '[]'));
   }, [navigate]);
+
+  // React to transaction cache updates (emitted by PriceCard after successful tx)
+  useEffect(() => {
+    const handler = async (e) => {
+      try {
+        const addr = e?.detail?.address;
+        if (!addr) return;
+        const key = `tx:${addr.toLowerCase()}`;
+        const cached = JSON.parse(localStorage.getItem(key) || '[]');
+        if (Array.isArray(cached)) setOnchainTx(cached);
+      } catch {}
+    };
+    window.addEventListener('tx-cache-updated', handler);
+    return () => window.removeEventListener('tx-cache-updated', handler);
+  }, []);
+
+  const refreshTransactions = async () => {
+    const props = JSON.parse(localStorage.getItem('properties') || '[]');
+    const archivedIds = JSON.parse(localStorage.getItem('archivedPropertyIds') || '[]');
+    const filteredProps = (props || []).filter(p => !p.archivedLocal && !archivedIds.includes(p.id) && (p.active === undefined || p.active));
+    await loadOnchainData(filteredProps);
+  };
+
+  const handleClaimAll = async () => {
+    try {
+      await web3Client.connect();
+      const propsToClaim = (properties || []).filter(p => Number(pendingMap[p.id] || 0) > 0 && (p.token || p.tokenAddress));
+      for (const p of propsToClaim) {
+        await web3Client.claimDividends({ token: p.token || p.tokenAddress, propertyId: p.id });
+      }
+      setDividendMsg('Claimed all pending dividends.');
+      setTimeout(() => setDividendMsg(''), 2500);
+      await refreshTransactions();
+    } catch (e) {
+      console.error(e);
+      setDividendMsg('Claim all failed.');
+      setTimeout(() => setDividendMsg(''), 2500);
+    }
+  };
+
+  const handleAvatarUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      const dataUrl = evt.target?.result;
+      if (typeof dataUrl === 'string') setEditAvatar(dataUrl);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSaveProfile = () => {
+    if (!user) return;
+    const updated = { ...user, name: editName?.trim() || '', email: editEmail?.trim() || '', avatar: editAvatar || '' };
+    localStorage.setItem('currentUser', JSON.stringify(updated));
+    // Persist per-address profile for wallet users
+    try {
+      if (updated.address) {
+        const key = (updated.address || '').toLowerCase();
+        const profiles = JSON.parse(localStorage.getItem('profiles') || '{}');
+        profiles[key] = { name: updated.name, email: updated.email, avatar: updated.avatar };
+        localStorage.setItem('profiles', JSON.stringify(profiles));
+      }
+    } catch {}
+    // Also update in users[] if present (match by id or email)
+    try {
+      const users = JSON.parse(localStorage.getItem('users') || '[]');
+      let changed = false;
+      const next = users.map(u => {
+        if ((user.id && u.id === user.id) || (user.email && u.email === user.email)) {
+          changed = true;
+          return { ...u, name: updated.name, email: updated.email, avatar: updated.avatar };
+        }
+        return u;
+      });
+      if (!changed && !user.isAdmin && (updated.email || updated.name)) {
+        // For MetaMask logins that had no entry, append a minimal record
+        next.push({ id: users.length ? Math.max(...users.map(x => x.id || 0)) + 1 : 1, email: updated.email || '', name: updated.name || '', avatar: updated.avatar || '' });
+      }
+      localStorage.setItem('users', JSON.stringify(next));
+    } catch {}
+    setUser(updated);
+    setSaveMsg('Profile saved');
+    setTimeout(() => setSaveMsg(''), 2000);
+  };
 
   const handleClaimDividends = async () => {
     try {
@@ -67,59 +246,69 @@ const Profile = () => {
 
   if (!user) return null;
 
-  // Properties owned (off-chain fallback)
-  const userProps = ownership.filter(o => o.userId === user.id && o.shares > 0);
+  // Properties owned (off-chain fallback). For wallet sessions, prefer on-chain and hide global ownership to prevent cross-wallet mixing.
+  const userProps = user?.address ? [] : ownership.filter(o => o.userId === user.id && o.shares > 0);
+  // On-chain holdings: show only properties with a non-zero balance
+  const nonZeroHoldings = (onchainHoldings || []).filter(h => Number(h?.balance || 0) > 0);
 
-  // Transactions (prefer on-chain)
-  const userTx = onchainTx.length ? onchainTx : transactions.filter(t => t.userId === user.id);
+  // Transactions: prefer on-chain if available, even if not in a wallet session
+  const userTx = (onchainTx && onchainTx.length)
+    ? onchainTx
+    : (user?.address ? [] : transactions.filter(t => t.userId === user.id));
 
   // Dividends
-  const dividends = userProps.map(o => {
-    const pool = dividendPools.find(p => p.propertyId === o.propertyId);
-    const prop = properties.find(p => p.id === o.propertyId);
-    if (!pool || !prop) return null;
-    const totalShares = prop.totalShares || prop.availableShares || 1;
-    const userDividend = Math.round((pool.amount * (o.shares / totalShares)) * 100) / 100;
+  // When using wallet, we prefer on-chain pending; legacy fallback kept for non-wallet users
+  const dividends = (onchainHoldings.length
+  ? (properties || []).map(p => {
+    const balRec = onchainHoldings.find(h => h.propertyId === p.id);
+    const pendingWeiStr = pendingMap[p.id] ?? '0';
+    let pendingEth = '0';
+    try { pendingEth = ethers.formatEther(BigInt(pendingWeiStr)); } catch {}
+    // Hide rows where user has no balance and no pending
+    if (!balRec && (!pendingWeiStr || pendingWeiStr === '0')) return null;
     return {
-      property: prop.title,
-      shares: o.shares,
-      totalShares,
-      pool: pool.amount,
-      userDividend
-    };
-  }).filter(Boolean);
+          property: p.title || p.metadataURI || `Property #${p.id}`,
+          shares: balRec ? balRec.balance : 0,
+          totalShares: p.totalShares || 0,
+          pool: '-',
+          userDividendEth: pendingEth,
+          propertyId: p.id,
+          token: p.token || p.tokenAddress
+        };
+      }).filter(Boolean)
+    : userProps.map(o => {
+        const pool = dividendPools.find(p => p.propertyId === o.propertyId);
+        const prop = properties.find(p => p.id === o.propertyId);
+        if (!pool || !prop) return null;
+        const totalShares = prop.totalShares || prop.availableShares || 1;
+        const userDividend = Math.round((pool.amount * (o.shares / totalShares)) * 100) / 100;
+        return { property: prop.title, shares: o.shares, totalShares, pool: pool.amount, userDividend };
+      }).filter(Boolean));
 
   return (
     <>
-      <header className="header">
-        <div className="logo">RealEstate dApp</div>
-        <nav className="nav">
-          <Link to="/" className="nav-link">Home</Link>
-          <Link to="/marketplace" className="nav-link">Marketplace</Link>
-          {user && !user.isAdmin && (
-            <Link to="/profile" className="nav-link">Profile</Link>
-          )}
-          {user && user.isAdmin && (
-            <Link to="/admin" className="nav-link">Admin</Link>
-          )}
-            <Link to="/about_us" className="nav-link">About Us</Link>
-          {!user ? (
-            <Link to="/login" className="btn-login">Login</Link>
-          ) : (
-            <button className="btn-login" onClick={() => {
-              localStorage.removeItem('currentUser');
-              navigate('/');
-            }}>Logout</button>
-          )}
-        </nav>
-      </header>
+      <AppHeader user={user} />
       <main>
         <div className="profile-container">
           <div className="profile-title">User Profile</div>
-          <div className="profile-avatar">{user.name ? user.name[0].toUpperCase() : 'U'}</div>
-          <div className="profile-section">
-            <span className="profile-label">Name:</span> <span className="profile-value">{user.name || '-'}</span><br />
-            <span className="profile-label">Email:</span> <span className="profile-value">{user.email || '-'}</span><br />
+          <div className="profile-avatar" style={{ overflow: 'hidden' }}>
+            {user.avatar || editAvatar ? (
+              <img src={editAvatar || user.avatar} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            ) : (
+              (user.name ? user.name[0].toUpperCase() : 'U')
+            )}
+          </div>
+          <div className="profile-section" style={{ display: 'grid', gap: 8 }}>
+            <label className="profile-label">Name</label>
+            <input value={editName} onChange={e => setEditName(e.target.value)} placeholder="Your name" />
+            <label className="profile-label" style={{ marginTop: 6 }}>Email</label>
+            <input value={editEmail} onChange={e => setEditEmail(e.target.value)} placeholder="you@example.com" />
+            <label className="profile-label" style={{ marginTop: 6 }}>Profile picture</label>
+            <input type="file" accept="image/*" onChange={handleAvatarUpload} />
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <button className="claim-div-btn" onClick={handleSaveProfile}>Save Profile</button>
+              <span style={{ color: '#4636e3', fontWeight: 500 }}>{saveMsg}</span>
+            </div>
           </div>
           <div className="profile-section">
             <div className="profile-label" style={{ marginBottom: 8 }}>Your Properties & Shares</div>
@@ -128,10 +317,10 @@ const Profile = () => {
                 <tr><th>Property</th><th>Shares Owned</th><th>Share Value (ETH)</th></tr>
               </thead>
               <tbody>
-                {userProps.length === 0 && onchainHoldings.length === 0 ? (
+                {userProps.length === 0 && nonZeroHoldings.length === 0 ? (
                   <tr><td colSpan={3}>No shares owned.</td></tr>
                 ) : (
-                  (onchainHoldings.length ? onchainHoldings.map(o => {
+                  (nonZeroHoldings.length ? nonZeroHoldings.map(o => {
                     const prop = properties.find(p => p.id === o.propertyId);
                     return (
                       <tr key={o.propertyId}>
@@ -156,6 +345,9 @@ const Profile = () => {
           </div>
           <div className="profile-section">
             <div className="profile-label" style={{ marginBottom: 8 }}>Transaction History</div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+              <button className="claim-div-btn" onClick={refreshTransactions}>Refresh</button>
+            </div>
             <table className="profile-table">
               <thead>
                 <tr><th>Date</th><th>Type</th><th>Property</th><th>Shares</th><th>Amount (ETH)</th></tr>
@@ -165,14 +357,25 @@ const Profile = () => {
                   <tr><td colSpan={5}>No transactions found.</td></tr>
                 ) : (
                   userTx.map((t, idx) => {
-                    const prop = properties.find(p => p.id === t.propertyId);
+                    const prop = properties.find(p => String(p.id) === String(t.propertyId));
+                    const shares = (t.amount !== undefined && t.amount !== null) ? String(t.amount) : (t.shares ?? '-');
+                    let eth = '-';
+                    try {
+                      if (t.price !== undefined && t.amount !== undefined) {
+                        const totalWei = (BigInt(t.price) * BigInt(t.amount));
+                        eth = ethers.formatEther(totalWei);
+                      } else if (t.amountEth) {
+                        eth = String(t.amountEth);
+                      }
+                    } catch {}
+                    const ts = t.timestamp ? new Date(t.timestamp) : new Date();
                     return (
                       <tr key={idx}>
-                        <td>{new Date(t.timestamp).toLocaleString()}</td>
-                        <td>{t.type}</td>
-                        <td>{prop ? prop.title : '-'}</td>
-                        <td>{t.shares || '-'}</td>
-                        <td>{t.amount || '-'}</td>
+                        <td>{ts.toLocaleString()}</td>
+                        <td>{t.type || '-'}</td>
+                        <td>{prop ? (prop.title || prop.metadataURI || `Property #${prop.id}`) : '-'}</td>
+                        <td>{shares}</td>
+                        <td>{eth}</td>
                       </tr>
                     );
                   })
@@ -184,7 +387,7 @@ const Profile = () => {
             <div className="profile-label" style={{ marginBottom: 8 }}>Dividend Distribution</div>
             <table className="profile-table">
               <thead>
-                <tr><th>Property</th><th>Your Shares</th><th>Total Shares</th><th>Dividend Pool (USD)</th><th>Your Dividend (USD)</th></tr>
+                <tr><th>Property</th><th>Your Shares</th><th>Total Shares</th><th>Pending (ETH)</th><th></th></tr>
               </thead>
               <tbody>
                 {dividends.length === 0 ? (
@@ -195,15 +398,70 @@ const Profile = () => {
                       <td>{d.property}</td>
                       <td>{d.shares}</td>
                       <td>{d.totalShares}</td>
-                      <td>${d.pool}</td>
-                      <td>${d.userDividend}</td>
+            <td>{d.userDividendEth ?? '-'}</td>
+                      <td>{d.token ? (() => {
+                        let hasPending = false;
+                        try { hasPending = (d.userDividendEth && Number(d.userDividendEth) > 0); } catch { hasPending = false; }
+                        return (
+                          <button
+                            className="claim-div-btn"
+                            disabled={!hasPending}
+                            title={hasPending ? '' : 'No pending dividends to claim'}
+                            onClick={async () => {
+                        try {
+                          await web3Client.claimDividends({ token: d.token, propertyId: d.propertyId });
+                          setDividendMsg('Dividends claimed on-chain.');
+                          setTimeout(() => setDividendMsg(''), 2500);
+              await refreshTransactions();
+                        } catch (e) {
+                          console.error(e);
+                          const msg = e?.shortMessage || e?.reason || e?.message || '';
+                          if (msg && msg.toUpperCase().includes('NO_PENDING')) {
+                            setDividendMsg('Claim failed: no pending dividends.');
+                          } else {
+                            setDividendMsg('Claim failed.');
+                          }
+                          setTimeout(() => setDividendMsg(''), 2500);
+                        }
+                      }}>Claim</button>
+                        );
+                      })() : null}</td>
                     </tr>
                   ))
                 )}
               </tbody>
             </table>
-            <div style={{ marginTop: 12, color: '#4636e3', fontWeight: 500 }}>{dividendMsg}</div>
-            <button className="claim-div-btn" style={{ marginTop: 18 }} onClick={handleClaimDividends}>Claim Dividends</button>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 }}>
+              <div style={{ color: '#4636e3', fontWeight: 500 }}>{dividendMsg}</div>
+              <button className="claim-div-btn" onClick={handleClaimAll}>Claim All</button>
+            </div>
+          </div>
+          <div className="profile-section">
+            <div className="profile-label" style={{ marginBottom: 8 }}>Dividend History</div>
+            <table className="profile-table">
+              <thead>
+                <tr><th>Date</th><th>Type</th><th>Property</th><th>Amount (ETH)</th></tr>
+              </thead>
+              <tbody>
+                {divHistory.length === 0 ? (
+                  <tr><td colSpan={4}>No dividend events.</td></tr>
+                ) : (
+                  divHistory.map((e, idx) => {
+                    const prop = properties.find(p => String(p.id) === String(e.propertyId));
+                    const eth = (() => { try { return ethers.formatEther(BigInt(e.amountWei || '0')); } catch { return '-'; } })();
+                    const ts = e.timestamp ? new Date(e.timestamp) : new Date();
+                    return (
+                      <tr key={idx}>
+                        <td>{ts.toLocaleString()}</td>
+                        <td>{e.type}</td>
+                        <td>{prop ? (prop.title || prop.metadataURI || `Property #${prop.id}`) : `#${e.propertyId}`}</td>
+                        <td>{eth}</td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
       </main>
