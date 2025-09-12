@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import './Home.css';
 import AppHeader from './components/AppHeader';
+import Carousel from './components/Carousel';
+import { getPropertiesSafe } from './utils/safeLocalStorage';
 
 // 9 fixed real-estate photos with two backups each (multi-fallback)
 const propertyImages = [
@@ -92,37 +94,53 @@ function TopProperties() {
   const [properties, setProperties] = useState([]);
 
   useEffect(() => {
-  const props = JSON.parse(localStorage.getItem('properties') || '[]') || [];
-  const archivedIds = JSON.parse(localStorage.getItem('archivedPropertyIds') || '[]');
-  // Exclude locally archived, globally archived, and inactive items if active flag exists
-  const active = props.filter(p => !p.archivedLocal && !archivedIds.includes(p.id) && (p.active === undefined || p.active));
-  if (active.length === 0) return setProperties([]);
-  const sorted = [...active].sort((a, b) => (Number(b.rentalYield || 0) + Number(b.annualReturn || 0)) - (Number(a.rentalYield || 0) + Number(a.annualReturn || 0)));
-  setProperties(sorted.slice(0, 3));
+    const props = getPropertiesSafe();
+    const archivedIds = JSON.parse(localStorage.getItem('archivedPropertyIds') || '[]');
+    // Exclude locally archived, globally archived, and inactive items if active flag exists
+    const active = props.filter(p => !p.archivedLocal && !archivedIds.includes(p.id) && (p.active === undefined || p.active));
+    if (active.length === 0) return setProperties([]);
+    const sorted = [...active].sort((a, b) => (Number(b.rentalYield || 0) + Number(b.annualReturn || 0)) - (Number(a.rentalYield || 0) + Number(a.annualReturn || 0)));
+    setProperties(sorted);
   }, []);
 
   if (!properties.length) {
     return <div className="top-properties-empty">Properties coming soon.</div>;
   }
 
+  const items = properties.map((p) => (
+    <Link to={`/property/${p.id}`} className="product-card" key={p.id}>
+      <img
+        src={p.image || 'https://placehold.co/600x400?text=Property'}
+        alt={p.title || 'Property'}
+        className="product-img"
+        referrerPolicy="no-referrer"
+        loading="lazy"
+        onError={(e) => { e.currentTarget.src = 'https://placehold.co/600x400?text=Property'; }}
+      />
+      <div className="product-info">
+        <div>
+          <div className="product-title">{p.title}</div>
+          <div className="product-address">{p.address}</div>
+        </div>
+        <div className="product-stats">
+          <div className="product-yield">{p.rentalYield}% <span>Rental Yield</span></div>
+          <div className="product-return">{p.annualReturn}% <span>Annual Return</span></div>
+        </div>
+      </div>
+      <div className="product-availability">Available: {p.availableShares} shares at {p.sharePrice} ETH</div>
+    </Link>
+  ));
+
   return (
     <div className="top-properties">
-      {properties.map((p, i) => (
-  <Link to={`/property/${p.id}`} className="product-card" key={i}>
-          <img src={p.image} alt={p.title} className="product-img" />
-          <div className="product-info">
-            <div>
-              <div className="product-title">{p.title}</div>
-              <div className="product-address">{p.address}</div>
-            </div>
-            <div className="product-stats">
-              <div className="product-yield">{p.rentalYield}% <span>Rental Yield</span></div>
-              <div className="product-return">{p.annualReturn}% <span>Annual Return</span></div>
-            </div>
-          </div>
-          <div className="product-availability">Available: {p.availableShares} shares at {p.sharePrice} ETH</div>
-  </Link>
-      ))}
+      <h2 className="section-title center">Featured Properties</h2>
+      <p className="section-subtitle center">Handpicked listings with attractive yields and steady income</p>
+      <Carousel
+        items={items}
+        autoPlay={true}
+        interval={3000}
+        breakpoints={[ { width: 0, slides: 1 }, { width: 768, slides: 2 }, { width: 1024, slides: 3 } ]}
+      />
     </div>
   );
 }

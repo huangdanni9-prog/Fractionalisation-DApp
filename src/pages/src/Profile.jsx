@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './Profile.css';
 import { web3Client } from './web3/client';
+import { getPropertiesSafe } from './utils/safeLocalStorage';
 import { ethers } from 'ethers';
 import AppHeader from './components/AppHeader';
 
@@ -120,7 +121,7 @@ const Profile = () => {
     setEditName(name);
     setEditEmail(email);
     setEditAvatar(avatar);
-  const props = JSON.parse(localStorage.getItem('properties') || '[]');
+  const props = getPropertiesSafe();
   const archivedIds = JSON.parse(localStorage.getItem('archivedPropertyIds') || '[]');
   const filteredProps = (props || []).filter(p => !p.archivedLocal && !archivedIds.includes(p.id) && (p.active === undefined || p.active));
   setOwnership(JSON.parse(localStorage.getItem('ownership') || '[]'));
@@ -154,7 +155,7 @@ const Profile = () => {
   }, []);
 
   const refreshTransactions = async () => {
-    const props = JSON.parse(localStorage.getItem('properties') || '[]');
+  const props = getPropertiesSafe();
     const archivedIds = JSON.parse(localStorage.getItem('archivedPropertyIds') || '[]');
     const filteredProps = (props || []).filter(p => !p.archivedLocal && !archivedIds.includes(p.id) && (p.active === undefined || p.active));
     await loadOnchainData(filteredProps);

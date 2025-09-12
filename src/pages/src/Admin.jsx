@@ -5,6 +5,7 @@ import { web3Client } from './web3/client';
 import { hasIPFSConfig, uploadImageDataURLToIPFS, uploadJSONToIPFS, resolveIpfsUrlToHttp, getWeb3StorageToken, getNftStorageToken } from './web3/ipfs';
 import AppHeader from './components/AppHeader';
 import { ethers } from 'ethers';
+import { savePropertiesSafe } from './utils/safeLocalStorage';
 
 const Admin = () => {
   const navigate = useNavigate();
@@ -36,7 +37,7 @@ const Admin = () => {
     const archivedIds = JSON.parse(localStorage.getItem('archivedPropertyIds') || '[]');
     const cleanedArchivedIds = (archivedIds || []).filter(id => keepIds.has(id));
     localStorage.setItem('archivedPropertyIds', JSON.stringify(cleanedArchivedIds));
-    localStorage.setItem('properties', JSON.stringify(keep));
+  savePropertiesSafe(keep);
     setProperties(keep.filter(p => !p.archivedLocal));
     setDeleteMsg('Cleared local drafts.');
     setTimeout(() => setDeleteMsg(''), 2500);
@@ -109,7 +110,7 @@ const Admin = () => {
           // Exclude local-only drafts by default to avoid phantom items unless explicitly needed
           const allActive = [...merged];
           setProperties(allActive);
-          localStorage.setItem('properties', JSON.stringify([...allActive, ...archived]));
+          savePropertiesSafe([...allActive, ...archived]);
         } catch {}
       } catch (e) {
         setWeb3Info({ account: null, chainId: null, error: e?.message || String(e) });
@@ -315,7 +316,7 @@ const Admin = () => {
           };
         }));
         setProperties(merged);
-        localStorage.setItem('properties', JSON.stringify(merged));
+  savePropertiesSafe(merged);
       } else {
         setPropMsg('On-chain create confirmed, but event not parsed.');
       }
@@ -414,10 +415,10 @@ const Admin = () => {
         };
         return out;
       }).filter(p => !p.archivedLocal);
-      localStorage.setItem('properties', JSON.stringify([...merged, ...archived]));
+  savePropertiesSafe([...merged, ...archived]);
       setProperties(merged);
     } catch {
-      localStorage.setItem('properties', JSON.stringify(updated));
+  savePropertiesSafe(updated);
     }
 
     setDeleteMsg(`Property "${propTitle}" deleted.`);
@@ -431,7 +432,7 @@ const Admin = () => {
     const propTitle = localProps[idx].title || `Property #${id}`;
     // Un-archive locally first
     localProps[idx] = { ...localProps[idx], archivedLocal: false };
-    localStorage.setItem('properties', JSON.stringify(localProps));
+  savePropertiesSafe(localProps);
   // Remove from archived ids set
   localStorage.setItem('archivedPropertyIds', JSON.stringify((archivedIds || []).filter(x => x !== id)));
     // Try to re-activate on-chain
@@ -468,7 +469,7 @@ const Admin = () => {
           annualReturn: lp?.annualReturn ?? ''
         };
       }).filter(p => !p.archivedLocal);
-      localStorage.setItem('properties', JSON.stringify([...merged, ...archived]));
+  savePropertiesSafe([...merged, ...archived]);
       setProperties(merged);
       setDeleteMsg(`Property "${propTitle}" restored.`);
     } catch {}
@@ -649,7 +650,13 @@ const Admin = () => {
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
                   {previewImgs.map((src, idx) => (
                     <div key={`pv-${idx}`} style={{ position: 'relative' }}>
-                      <img src={src} alt={`Preview ${idx+1}`} style={{ width: 80, height: 80, objectFit: 'cover', borderRadius: 8, border: '1px solid #e5e7eb' }} />
+                      <img
+                        src={src || 'https://placehold.co/120x120?text=Img'}
+                        alt={`Preview ${idx+1}`}
+                        style={{ width: 80, height: 80, objectFit: 'cover', borderRadius: 8, border: '1px solid #e5e7eb' }}
+                        loading="lazy"
+                        onError={(e) => { e.currentTarget.src = 'https://placehold.co/120x120?text=Img'; }}
+                      />
                       {idx === 0 && (
                         <span style={{ position: 'absolute', top: 2, left: 2, background: '#4636e3', color: '#fff', fontSize: 10, padding: '2px 4px', borderRadius: 4 }}>Thumbnail</span>
                       )}
@@ -793,7 +800,7 @@ const Admin = () => {
                         : pp
                     ));
                     setProperties(next);
-                    try { localStorage.setItem('properties', JSON.stringify(next)); } catch {}
+                    try { savePropertiesSafe(next); } catch {}
                   }
                   if (didMeta && didPrice) {
                     setEditMsg('Property updated.');
@@ -848,7 +855,7 @@ const Admin = () => {
                         : pp
                     ));
                     setProperties(next);
-                    try { localStorage.setItem('properties', JSON.stringify(next)); } catch {}
+                    try { savePropertiesSafe(next); } catch {}
                     setEditMsg('Gallery uploaded to IPFS and metadata updated.');
                     setTimeout(() => setEditMsg(''), 3000);
                   } catch (e) {
@@ -871,7 +878,13 @@ const Admin = () => {
                 ) : (
                   properties.map(p => (
                     <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 12, background: '#fff', padding: 10, borderRadius: 8, boxShadow: '0 1px 6px rgba(70,54,227,0.07)' }}>
-                      <img src={p.image} alt={p.title} style={{ width: 60, height: 60, objectFit: 'cover', borderRadius: 8 }} />
+                      <img
+                        src={p.image || 'https://placehold.co/120x120?text=Img'}
+                        alt={p.title || 'Property'}
+                        style={{ width: 60, height: 60, objectFit: 'cover', borderRadius: 8 }}
+                        loading="lazy"
+                        onError={(e) => { e.currentTarget.src = 'https://placehold.co/120x120?text=Img'; }}
+                      />
                       <div style={{ flex: 1 }}>
                         <div style={{ fontWeight: 600, color: '#4636e3' }}>{p.title}</div>
                         <div style={{ fontSize: '0.98rem', color: '#444' }}>{p.address}</div>
@@ -892,7 +905,13 @@ const Admin = () => {
                   if (archived.length === 0) return <div>No archived properties.</div>;
                   return archived.map(p => (
                     <div key={`arch-${p.id}`} style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 12, background: '#fff', padding: 10, borderRadius: 8, boxShadow: '0 1px 6px rgba(70,54,227,0.07)' }}>
-                      <img src={p.image} alt={p.title} style={{ width: 60, height: 60, objectFit: 'cover', borderRadius: 8 }} />
+                      <img
+                        src={p.image || 'https://placehold.co/120x120?text=Img'}
+                        alt={p.title || 'Property'}
+                        style={{ width: 60, height: 60, objectFit: 'cover', borderRadius: 8 }}
+                        loading="lazy"
+                        onError={(e) => { e.currentTarget.src = 'https://placehold.co/120x120?text=Img'; }}
+                      />
                       <div style={{ flex: 1 }}>
                         <div style={{ fontWeight: 600, color: '#4636e3' }}>{p.title || `Property #${p.id}`}</div>
                         <div style={{ fontSize: '0.98rem', color: '#444' }}>{p.address || ''}</div>

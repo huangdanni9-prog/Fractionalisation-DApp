@@ -104,6 +104,25 @@ body, .home-root {
   gap: 32px;
   flex-wrap: wrap;
 }
+.section-title {
+  width: 100%;
+  margin: 6px 0 8px 0;
+  font-size: 1.8rem;
+  font-weight: 800;
+  color: #1a237e;
+}
+.section-title.center {
+  text-align: center;
+}
+.section-subtitle {
+  width: 100%;
+  margin: 0 0 18px 0;
+  font-size: 1.05rem;
+  color: #4b5563;
+}
+.section-subtitle.center {
+  text-align: center;
+}
 .top-properties-empty {
   font-size: 1.2rem;
   color: #4636e3;
@@ -191,6 +210,23 @@ body, .home-root {
   background: #0b63ff;
   color: #fff;
   box-shadow: 0 2px 8px rgba(70,54,227,0.10);
+}
+/* Carousel styling */
+.carousel-root {
+  width: 100%;
+  max-width: 1200px;
+}
+.carousel-viewport {
+  border-radius: 16px;
+}
+.carousel-track {
+  padding: 6px !important;
+}
+.carousel-prev, .carousel-next {
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+.carousel-dots button {
+  transition: background 0.2s ease;
 }
 .features {
   margin: 64px auto 0 auto;

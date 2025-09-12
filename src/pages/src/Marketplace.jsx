@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { savePropertiesSafe, getPropertiesSafe } from './utils/safeLocalStorage';
 import { useNavigate } from 'react-router-dom';
 import { ethers } from 'ethers';
 import { web3Client } from './web3/client';
@@ -87,7 +88,7 @@ export default function Marketplace() {
     const userStr = localStorage.getItem('currentUser');
     setUser(userStr ? JSON.parse(userStr) : null);
     // Load properties from localStorage as UI metadata source
-  const localProps = JSON.parse(localStorage.getItem('properties') || '[]');
+    const localProps = getPropertiesSafe();
   const archivedIds = JSON.parse(localStorage.getItem('archivedPropertyIds') || '[]');
   // Hide locally if archived OR explicitly inactive
   setProperties((localProps || []).filter(p => !p.archivedLocal && !archivedIds.includes(p.id) && p?.active !== false));
@@ -121,7 +122,7 @@ export default function Marketplace() {
             };
           }).filter(p => !p.archivedLocal);
           setProperties(merged);
-          localStorage.setItem('properties', JSON.stringify(merged));
+          savePropertiesSafe(merged);
         }
         setLoading(false);
       } catch {
@@ -158,7 +159,7 @@ export default function Marketplace() {
       const archivedIds = JSON.parse(localStorage.getItem('archivedPropertyIds') || '[]');
       const isZero = (a) => !a || /^0x0{40}$/i.test(a);
       const onchain = (onchainAll || []).filter(cp => cp.active && !archivedIds.includes(cp.id) && !isZero(cp.tokenAddress || cp.token) && Number(cp.totalShares || 0) > 0);
-      const localProps = JSON.parse(localStorage.getItem('properties') || '[]');
+      const localProps = getPropertiesSafe();
       const merged = onchain.map(cp => {
         const lp = localProps.find(x => x.id === cp.id);
         return {
@@ -180,7 +181,7 @@ export default function Marketplace() {
         };
       }).filter(p => !p.archivedLocal);
       setProperties(merged);
-      localStorage.setItem('properties', JSON.stringify(merged));
+      savePropertiesSafe(merged);
       setTradeMsg('');
     } catch (e) {
       setTradeMsg(e?.reason || e?.message || 'Chain refresh failed.');
