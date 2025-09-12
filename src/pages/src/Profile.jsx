@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './Profile.css';
 import { web3Client } from './web3/client';
@@ -46,6 +46,7 @@ const Profile = () => {
   const [editEmail, setEditEmail] = useState('');
   const [editAvatar, setEditAvatar] = useState('');
   const [saveMsg, setSaveMsg] = useState('');
+  const [expandedTx, setExpandedTx] = useState({}); // txHash -> boolean
 
   const loadOnchainData = async (filteredProps) => {
     try {
@@ -97,12 +98,9 @@ const Profile = () => {
 
   useEffect(() => {
     const userStr = localStorage.getItem('currentUser');
-    if (!userStr) {
-      alert('Please login to view your profile.');
-      navigate('/login');
-      return;
-    }
-    const parsed = JSON.parse(userStr);
+    // If no stored user, allow wallet-only sessions to land here without redirect.
+    // We'll render a connect prompt via header and keep the page visible.
+    const parsed = userStr ? JSON.parse(userStr) : {};
     // If wallet-based user, hydrate fields from profiles[address]
     let name = parsed?.name || '';
     let email = parsed?.email || '';
@@ -118,7 +116,7 @@ const Profile = () => {
         localStorage.setItem('currentUser', JSON.stringify(parsed));
       }
     } catch {}
-    setUser(parsed);
+  setUser(parsed);
     setEditName(name);
     setEditEmail(email);
     setEditAvatar(avatar);
@@ -244,17 +242,67 @@ const Profile = () => {
     }
   };
 
-  if (!user) return null;
+  // Don't short-circuit render when user is not yet loaded; render a lightweight UI instead.
+  // Guard all user.* reads below with optional chaining.
 
   // Properties owned (off-chain fallback). For wallet sessions, prefer on-chain and hide global ownership to prevent cross-wallet mixing.
-  const userProps = user?.address ? [] : ownership.filter(o => o.userId === user.id && o.shares > 0);
+  const userProps = user?.address ? [] : (user?.id ? ownership.filter(o => o.userId === user.id && o.shares > 0) : []);
   // On-chain holdings: show only properties with a non-zero balance
   const nonZeroHoldings = (onchainHoldings || []).filter(h => Number(h?.balance || 0) > 0);
 
   // Transactions: prefer on-chain if available, even if not in a wallet session
   const userTx = (onchainTx && onchainTx.length)
     ? onchainTx
-    : (user?.address ? [] : transactions.filter(t => t.userId === user.id));
+    : (user?.address ? [] : (user?.id ? transactions.filter(t => t.userId === user.id) : []));
+
+  // Group related events by transaction (txHash) and select a primary event per tx
+  const groupedTx = useMemo(() => {
+    if (!Array.isArray(userTx) || !userTx.length) return [];
+    const map = new Map();
+    for (const e of userTx) {
+      const key = e.txHash || `blk:${e.blockNumber}:${e.logIndex}:${e.type}`;
+      const arr = map.get(key) || [];
+      arr.push(e);
+      map.set(key, arr);
+    }
+    const priority = { buy: 4, sell: 4, list: 3, claim: 3, mint: 2, receive: 2, send: 2 };
+    const groups = [];
+    for (const [txHash, evs] of map.entries()) {
+      const sorted = [...evs].sort((a, b) =>
+        (Number(a.blockNumber || 0) - Number(b.blockNumber || 0)) ||
+        (Number(a.transactionIndex || 0) - Number(b.transactionIndex || 0)) ||
+        (Number(a.logIndex || 0) - Number(b.logIndex || 0))
+      );
+      // choose primary with highest priority; fallback to first
+      let primary = sorted[0];
+      for (const e of sorted) {
+        if ((priority[e.type] || 0) > (priority[primary.type] || 0)) primary = e;
+      }
+      const timestamp = primary.timestamp || sorted[0]?.timestamp || Date.now();
+      const propertyId = primary.propertyId ?? (sorted.find(e => e.propertyId !== undefined)?.propertyId);
+      // aggregate shares/eth for marketplace-like events; else for transfers
+      const sumAmt = (types) => sorted
+        .filter(e => types.includes(e.type))
+        .reduce((acc, e) => acc + Number(e.amount || e.shares || 0), 0);
+      const shares = sumAmt(['buy', 'sell', 'list']) || sumAmt(['mint', 'receive', 'send']) || '-';
+      let totalWei = 0n;
+      for (const e of sorted) {
+        try {
+          if ((e.type === 'buy' || e.type === 'sell' || e.type === 'list') && e.price !== undefined && e.amount !== undefined) {
+            totalWei += (BigInt(e.price) * BigInt(e.amount));
+          }
+        } catch {}
+      }
+      const amountEth = totalWei > 0n ? ethers.formatEther(totalWei) : '-';
+      groups.push({ txHash, primary, events: sorted, timestamp, propertyId, shares, amountEth });
+    }
+    groups.sort((a, b) =>
+      (Number(b.primary.blockNumber || 0) - Number(a.primary.blockNumber || 0)) ||
+      (Number(b.primary.transactionIndex || 0) - Number(a.primary.transactionIndex || 0)) ||
+      (Number(b.primary.logIndex || 0) - Number(a.primary.logIndex || 0))
+    );
+    return groups;
+  }, [userTx]);
 
   // Dividends
   // When using wallet, we prefer on-chain pending; legacy fallback kept for non-wallet users
@@ -292,10 +340,10 @@ const Profile = () => {
         <div className="profile-container">
           <div className="profile-title">User Profile</div>
           <div className="profile-avatar" style={{ overflow: 'hidden' }}>
-            {user.avatar || editAvatar ? (
-              <img src={editAvatar || user.avatar} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            {(user?.avatar || editAvatar) ? (
+              <img src={editAvatar || user?.avatar} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
             ) : (
-              (user.name ? user.name[0].toUpperCase() : 'U')
+              (user?.name ? user.name[0].toUpperCase() : 'U')
             )}
           </div>
           <div className="profile-section" style={{ display: 'grid', gap: 8 }}>
@@ -350,33 +398,75 @@ const Profile = () => {
             </div>
             <table className="profile-table">
               <thead>
-                <tr><th>Date</th><th>Type</th><th>Property</th><th>Shares</th><th>Amount (ETH)</th></tr>
+                <tr><th>Date</th><th>Type</th><th>Property</th><th>Shares</th><th>Amount (ETH)</th><th></th></tr>
               </thead>
               <tbody>
-                {userTx.length === 0 ? (
-                  <tr><td colSpan={5}>No transactions found.</td></tr>
+                {groupedTx.length === 0 ? (
+                  <tr><td colSpan={6}>No transactions found.</td></tr>
                 ) : (
-                  userTx.map((t, idx) => {
-                    const prop = properties.find(p => String(p.id) === String(t.propertyId));
-                    const shares = (t.amount !== undefined && t.amount !== null) ? String(t.amount) : (t.shares ?? '-');
-                    let eth = '-';
-                    try {
-                      if (t.price !== undefined && t.amount !== undefined) {
-                        const totalWei = (BigInt(t.price) * BigInt(t.amount));
-                        eth = ethers.formatEther(totalWei);
-                      } else if (t.amountEth) {
-                        eth = String(t.amountEth);
-                      }
-                    } catch {}
-                    const ts = t.timestamp ? new Date(t.timestamp) : new Date();
+                  groupedTx.map((g, idx) => {
+                    const prop = properties.find(p => String(p.id) === String(g.propertyId));
+                    const ts = g.timestamp ? new Date(g.timestamp) : new Date();
+                    const open = !!expandedTx[g.txHash];
                     return (
-                      <tr key={idx}>
-                        <td>{ts.toLocaleString()}</td>
-                        <td>{t.type || '-'}</td>
-                        <td>{prop ? (prop.title || prop.metadataURI || `Property #${prop.id}`) : '-'}</td>
-                        <td>{shares}</td>
-                        <td>{eth}</td>
-                      </tr>
+                      <React.Fragment key={g.txHash || idx}>
+                        <tr key={g.txHash || idx}>
+                          <td>{ts.toLocaleString()}</td>
+                          <td>{g.primary?.type || '-'}</td>
+                          <td>{prop ? (prop.title || prop.metadataURI || `Property #${prop.id}`) : (g.propertyId ?? '-')}</td>
+                          <td>{g.shares}</td>
+                          <td>{g.amountEth}</td>
+                          <td>
+                            {g.events.length > 1 ? (
+                              <button className="claim-div-btn" onClick={() => setExpandedTx(prev => ({ ...prev, [g.txHash]: !open }))}>
+                                {open ? 'Hide' : 'Details'}
+                              </button>
+                            ) : null}
+                          </td>
+                        </tr>
+                        {open ? (
+                          <tr>
+                            <td colSpan={6}>
+                              <div style={{ padding: '8px 12px', background: '#f8f7ff', borderRadius: 8 }}>
+                                <div style={{ fontWeight: 600, marginBottom: 6 }}>Transaction details</div>
+                                <table style={{ width: '100%', fontSize: 12 }}>
+                                  <thead>
+                                    <tr style={{ textAlign: 'left' }}>
+                                      <th>Type</th><th>Property</th><th>Shares</th><th>Amount (ETH)</th><th>Block</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {g.events.map((e, i) => {
+                                      const p2 = properties.find(p => String(p.id) === String(e.propertyId));
+                                      let eth = '-';
+                                      try {
+                                        if (e.price !== undefined && e.amount !== undefined && (e.type === 'buy' || e.type === 'sell' || e.type === 'list')) {
+                                          eth = ethers.formatEther(BigInt(e.price) * BigInt(e.amount));
+                                        } else if (e.amountEth) {
+                                          eth = String(e.amountEth);
+                                        }
+                                      } catch {}
+                                      const shares = (e.amount !== undefined && e.amount !== null) ? String(e.amount) : (e.shares ?? '-');
+                                      return (
+                                        <tr key={`${g.txHash}:${i}`}>
+                                          <td>{e.type}</td>
+                                          <td>{p2 ? (p2.title || p2.metadataURI || `Property #${p2.id}`) : (e.propertyId ?? '-')}</td>
+                                          <td>{shares}</td>
+                                          <td>{eth}</td>
+                                          <td>{String(e.blockNumber ?? '')}</td>
+                                        </tr>
+                                      );
+                                    })}
+                                  </tbody>
+                                </table>
+                                <div style={{ marginTop: 6, color: '#666' }}>
+                                  Tx: <span className="mono">{g.txHash}</span>
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        ) : null}
+                      </React.Fragment>
                     );
                   })
                 )}

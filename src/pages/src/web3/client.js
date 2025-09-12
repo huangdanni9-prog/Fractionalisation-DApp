@@ -637,8 +637,11 @@ export class Web3Client {
     // Build filters
     const purchaseFilter = this.marketplace.filters.SharesPurchased(null, normAddr);
     const sellFilter = this.marketplace.filters.SharesSold(null, normAddr);
-    const listCreatedFilter = this.marketplace.filters.ListingCreated(null, null, normAddr);
-    const listFilledFilter = this.marketplace.filters.ListingFilled(null, normAddr);
+  const listCreatedFilter = this.marketplace.filters.ListingCreated(null, null, normAddr);
+  const listFilledFilter = this.marketplace.filters.ListingFilled(null, normAddr);
+  // Include dividend claims (these originate from Marketplace)
+  let claimedFilter = null;
+  try { claimedFilter = this.marketplace.filters.DividendClaimed(null, normAddr); } catch {}
 
     // Prepare a lite contract to read listing details (propertyId, price)
     let mktLite = null;
@@ -665,13 +668,15 @@ export class Web3Client {
     // Query events
     const purchases = await this.marketplace.queryFilter(purchaseFilter, fromBlock, toBlock);
     const sales = await this.marketplace.queryFilter(sellFilter, fromBlock, toBlock);
-    let listingsCreated = [];
+  let listingsCreated = [];
     try { listingsCreated = await this.marketplace.queryFilter(listCreatedFilter, fromBlock, toBlock); } catch {}
-    let listingsFilled = [];
+  let listingsFilled = [];
     try { listingsFilled = await this.marketplace.queryFilter(listFilledFilter, fromBlock, toBlock); } catch {}
+  let claims = [];
+  try { if (claimedFilter) claims = await this.marketplace.queryFilter(claimedFilter, fromBlock, toBlock); } catch {}
 
     // Timestamp enrichment across ALL event types
-    const rawAll = [...purchases, ...sales, ...listingsCreated, ...listingsFilled];
+  const rawAll = [...purchases, ...sales, ...listingsCreated, ...listingsFilled, ...claims];
     const uniqueBlocks = Array.from(new Set(rawAll.map(e => e.blockNumber)));
     const blockMap = new Map();
     for (const bn of uniqueBlocks) {
@@ -750,6 +755,20 @@ export class Web3Client {
         timestamp: blockMap.get(e.blockNumber)
       });
     }
+    // Dividend claims
+    for (const e of claims) {
+      events.push({
+        type: 'claim',
+        propertyId: e.args[0]?.toString(),
+        user: e.args[1],
+        amount: e.args[2]?.toString(),
+        txHash: e.transactionHash,
+        blockNumber: e.blockNumber,
+        transactionIndex: e.transactionIndex,
+        logIndex: e.logIndex,
+        timestamp: blockMap.get(e.blockNumber)
+      });
+    }
 
     // Stable sort: blockNumber desc, transactionIndex desc, logIndex desc
     events.sort((a, b) =>
@@ -758,7 +777,7 @@ export class Web3Client {
       (Number(b.logIndex ?? 0) - Number(a.logIndex ?? 0))
     );
 
-    // Fallback: widen range to block 0 and include listing events as well
+  // Fallback: widen range to block 0 and include listing events as well
     if (!events.length) {
       try {
         const fb = 0;
@@ -766,9 +785,11 @@ export class Web3Client {
         const sales2 = await this.marketplace.queryFilter(sellFilter, fb, toBlock);
         let listingsCreated2 = [];
         try { listingsCreated2 = await this.marketplace.queryFilter(listCreatedFilter, fb, toBlock); } catch {}
-        let listingsFilled2 = [];
+  let listingsFilled2 = [];
         try { listingsFilled2 = await this.marketplace.queryFilter(listFilledFilter, fb, toBlock); } catch {}
-        const all2 = [...purchases2, ...sales2, ...listingsCreated2, ...listingsFilled2];
+  let claims2 = [];
+  try { if (claimedFilter) claims2 = await this.marketplace.queryFilter(claimedFilter, fb, toBlock); } catch {}
+  const all2 = [...purchases2, ...sales2, ...listingsCreated2, ...listingsFilled2, ...claims2];
         const uniqueBlocks2 = Array.from(new Set(all2.map(e => e.blockNumber)));
         const blockMap2 = new Map();
         for (const bn of uniqueBlocks2) {
@@ -842,6 +863,19 @@ export class Web3Client {
             timestamp: blockMap2.get(e.blockNumber)
           });
         }
+        for (const e of claims2) {
+          events.push({
+            type: 'claim',
+            propertyId: e.args[0]?.toString(),
+            user: e.args[1],
+            amount: e.args[2]?.toString(),
+            txHash: e.transactionHash,
+            blockNumber: e.blockNumber,
+            transactionIndex: e.transactionIndex,
+            logIndex: e.logIndex,
+            timestamp: blockMap2.get(e.blockNumber)
+          });
+        }
         events.sort((a, b) =>
           (Number(b.blockNumber) - Number(a.blockNumber)) ||
           (Number(b.transactionIndex ?? 0) - Number(a.transactionIndex ?? 0)) ||
@@ -849,6 +883,66 @@ export class Web3Client {
         );
       } catch {}
     }
+
+    // Also incorporate ERC20 Transfer events across all known property tokens.
+    // This captures mints/transfers done outside Marketplace so the user still sees activity.
+    try {
+      // Read a reasonable window of properties; adjust count if your registry has more.
+      const maxProps = 200;
+      const arr = await this.registry.getAllProperties(0, maxProps);
+      const erc20Abi = [
+        { "anonymous": false, "inputs": [
+          { "indexed": true, "internalType": "address", "name": "from", "type": "address" },
+          { "indexed": true, "internalType": "address", "name": "to", "type": "address" },
+          { "indexed": false, "internalType": "uint256", "name": "value", "type": "uint256" }
+        ], "name": "Transfer", "type": "event" }
+      ];
+      for (let idx = 0; idx < arr.length; idx++) {
+        const p = arr[idx];
+        const token = p.fractionalToken;
+        if (!token) continue;
+        try {
+          const c = new ethers.Contract(token, erc20Abi, this.provider);
+          const recvFilter = c.filters.Transfer(null, normAddr);
+          const sendFilter = c.filters.Transfer(normAddr, null);
+          const [recvLogs, sendLogs] = await Promise.all([
+            c.queryFilter(recvFilter, fromBlock, toBlock),
+            c.queryFilter(sendFilter, fromBlock, toBlock)
+          ]);
+          for (const e of recvLogs) {
+            events.push({
+              type: e.args?.[0] === ethers.ZeroAddress ? 'mint' : 'receive',
+              propertyId: (0 + idx).toString(),
+              user: normAddr,
+              amount: e.args?.[2]?.toString?.(),
+              txHash: e.transactionHash,
+              blockNumber: e.blockNumber,
+              transactionIndex: e.transactionIndex,
+              logIndex: e.logIndex,
+              timestamp: (await this.provider.getBlock(e.blockNumber))?.timestamp * 1000
+            });
+          }
+          for (const e of sendLogs) {
+            events.push({
+              type: 'send',
+              propertyId: (0 + idx).toString(),
+              user: normAddr,
+              amount: e.args?.[2]?.toString?.(),
+              txHash: e.transactionHash,
+              blockNumber: e.blockNumber,
+              transactionIndex: e.transactionIndex,
+              logIndex: e.logIndex,
+              timestamp: (await this.provider.getBlock(e.blockNumber))?.timestamp * 1000
+            });
+          }
+        } catch {}
+      }
+      events.sort((a, b) =>
+        (Number(b.blockNumber) - Number(a.blockNumber)) ||
+        (Number(b.transactionIndex ?? 0) - Number(a.transactionIndex ?? 0)) ||
+        (Number(b.logIndex ?? 0) - Number(a.logIndex ?? 0))
+      );
+    } catch {}
     return events;
   }
 }

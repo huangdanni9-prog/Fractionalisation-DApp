@@ -1,6 +1,6 @@
 {
   "scripts": {
-  "chain": "npx ganache --database.dbPath ./ganache-db --chain.chainId 1337 --server.port 8545 --wallet.totalAccounts 10 --wallet.defaultBalance 1000 --wallet.mnemonic 'hungry author action awake divorce journey second typical leisure lottery hunt fit'",
+  "chain": "npx ganache --database.dbPath ./ganache-db --chain.chainId 1337 --server.port 8545 --wallet.totalAccounts 10 --wallet.defaultBalance 1000 --wallet.mnemonic \"hungry author action awake divorce journey second typical leisure lottery hunt fit\"",
     "deploy:ganache": "hardhat run scripts/deploy.js --network ganache",
     "seed:ganache": "hardhat run scripts/seed-ganache.js --network ganache",
   "verify:ganache": "hardhat run scripts/verify-ganache.js --network ganache",

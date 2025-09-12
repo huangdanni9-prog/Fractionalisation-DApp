@@ -42,6 +42,45 @@
         "Marketplace"
       ]
     },
+    "C:\\Users\\user\\Desktop\\Project\\Fractionalisation-DApp\\contracts\\contracts\\core\\PropertyRegistry.sol": {
+      "lastModificationDate": 1757423642984,
+      "contentHash": "7a683329c0968c6ea5484f6c654c143e",
+      "sourceName": "contracts/core/PropertyRegistry.sol",
+      "solcConfig": {
+        "version": "0.8.20",
+        "settings": {
+          "evmVersion": "paris",
+          "optimizer": {
+            "enabled": false,
+            "runs": 200
+          },
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "@openzeppelin/contracts/access/Ownable.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.20"
+      ],
+      "artifacts": [
+        "IFractionalTokenReadonly",
+        "PropertyRegistry"
+      ]
+    },
     "C:\\Users\\user\\Desktop\\Project\\Fractionalisation-DApp\\contracts\\tokens\\FractionalToken.sol": {
       "lastModificationDate": 1757402977306,
       "contentHash": "410e74375227b67812908ea020da571f",
@@ -79,45 +118,6 @@
       ],
       "artifacts": [
         "FractionalToken"
-      ]
-    },
-    "C:\\Users\\user\\Desktop\\Project\\Fractionalisation-DApp\\contracts\\core\\PropertyRegistry.sol": {
-      "lastModificationDate": 1757520987965,
-      "contentHash": "ac4d41d9c2c233399dfb1837913791b4",
-      "sourceName": "core/PropertyRegistry.sol",
-      "solcConfig": {
-        "version": "0.8.20",
-        "settings": {
-          "evmVersion": "paris",
-          "optimizer": {
-            "enabled": false,
-            "runs": 200
-          },
-          "outputSelection": {
-            "*": {
-              "*": [
-                "abi",
-                "evm.bytecode",
-                "evm.deployedBytecode",
-                "evm.methodIdentifiers",
-                "metadata"
-              ],
-              "": [
-                "ast"
-              ]
-            }
-          }
-        }
-      },
-      "imports": [
-        "@openzeppelin/contracts/access/Ownable.sol"
-      ],
-      "versionPragmas": [
-        "^0.8.20"
-      ],
-      "artifacts": [
-        "IFractionalTokenReadonly",
-        "PropertyRegistry"
       ]
     },
     "C:\\Users\\user\\Desktop\\Project\\Fractionalisation-DApp\\contracts\\node_modules\\@openzeppelin\\contracts\\access\\Ownable.sol": {
@@ -194,6 +194,42 @@
         "ReentrancyGuard"
       ]
     },
+    "C:\\Users\\user\\Desktop\\Project\\Fractionalisation-DApp\\contracts\\node_modules\\@openzeppelin\\contracts\\utils\\Context.sol": {
+      "lastModificationDate": 1757405948385,
+      "contentHash": "67bfbc07588eb8683b3fd8f6f909563e",
+      "sourceName": "@openzeppelin/contracts/utils/Context.sol",
+      "solcConfig": {
+        "version": "0.8.20",
+        "settings": {
+          "evmVersion": "paris",
+          "optimizer": {
+            "enabled": false,
+            "runs": 200
+          },
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        "^0.8.20"
+      ],
+      "artifacts": [
+        "Context"
+      ]
+    },
     "C:\\Users\\user\\Desktop\\Project\\Fractionalisation-DApp\\contracts\\node_modules\\@openzeppelin\\contracts\\token\\ERC20\\ERC20.sol": {
       "lastModificationDate": 1757405948441,
       "contentHash": "59dfce11284f2636db261df9b6a18f81",
@@ -233,42 +269,6 @@
       ],
       "artifacts": [
         "ERC20"
-      ]
-    },
-    "C:\\Users\\user\\Desktop\\Project\\Fractionalisation-DApp\\contracts\\node_modules\\@openzeppelin\\contracts\\utils\\Context.sol": {
-      "lastModificationDate": 1757405948385,
-      "contentHash": "67bfbc07588eb8683b3fd8f6f909563e",
-      "sourceName": "@openzeppelin/contracts/utils/Context.sol",
-      "solcConfig": {
-        "version": "0.8.20",
-        "settings": {
-          "evmVersion": "paris",
-          "optimizer": {
-            "enabled": false,
-            "runs": 200
-          },
-          "outputSelection": {
-            "*": {
-              "*": [
-                "abi",
-                "evm.bytecode",
-                "evm.deployedBytecode",
-                "evm.methodIdentifiers",
-                "metadata"
-              ],
-              "": [
-                "ast"
-              ]
-            }
-          }
-        }
-      },
-      "imports": [],
-      "versionPragmas": [
-        "^0.8.20"
-      ],
-      "artifacts": [
-        "Context"
       ]
     },
     "C:\\Users\\user\\Desktop\\Project\\Fractionalisation-DApp\\contracts\\node_modules\\@openzeppelin\\contracts\\interfaces\\draft-IERC6093.sol": {
@@ -381,45 +381,6 @@
       ],
       "artifacts": [
         "IERC20Metadata"
-      ]
-    },
-    "C:\\Users\\user\\Desktop\\Project\\Fractionalisation-DApp\\contracts\\contracts\\core\\PropertyRegistry.sol": {
-      "lastModificationDate": 1757423642984,
-      "contentHash": "7a683329c0968c6ea5484f6c654c143e",
-      "sourceName": "contracts/core/PropertyRegistry.sol",
-      "solcConfig": {
-        "version": "0.8.20",
-        "settings": {
-          "evmVersion": "paris",
-          "optimizer": {
-            "enabled": false,
-            "runs": 200
-          },
-          "outputSelection": {
-            "*": {
-              "*": [
-                "abi",
-                "evm.bytecode",
-                "evm.deployedBytecode",
-                "evm.methodIdentifiers",
-                "metadata"
-              ],
-              "": [
-                "ast"
-              ]
-            }
-          }
-        }
-      },
-      "imports": [
-        "@openzeppelin/contracts/access/Ownable.sol"
-      ],
-      "versionPragmas": [
-        "^0.8.20"
-      ],
-      "artifacts": [
-        "IFractionalTokenReadonly",
-        "PropertyRegistry"
       ]
     },
     "C:\\Users\\user\\Desktop\\Project\\Fractionalisation-DApp\\contracts\\contracts\\Temp.sol": {

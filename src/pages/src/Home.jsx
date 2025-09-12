@@ -3,16 +3,53 @@ import { Link, useNavigate } from 'react-router-dom';
 import './Home.css';
 import AppHeader from './components/AppHeader';
 
+// 9 fixed real-estate photos with two backups each (multi-fallback)
 const propertyImages = [
-  'https://images.unsplash.com/photo-1507089947368-19c1da9775ae?auto=format&fit=crop&w=400&q=80',
-  'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=400&q=80',
-  'https://images.unsplash.com/photo-1465101046530-73398c7f28ca?auto=format&fit=crop&w=400&q=80',
-  'https://images.unsplash.com/photo-1512918728675-ed5a9ecdebfd?auto=format&fit=crop&w=400&q=80',
-  'https://images.unsplash.com/photo-1464983953574-0892a716854b?auto=format&fit=crop&w=400&q=80',
-  'https://images.unsplash.com/photo-1505691723518-41cb85eea23e?auto=format&fit=crop&w=400&q=80',
-  'https://images.unsplash.com/photo-1506377247377-2a5b3b417ebb?auto=format&fit=crop&w=400&q=80',
-  'https://images.unsplash.com/photo-1519985176271-adb1088fa94c?auto=format&fit=crop&w=400&q=80',
-  'https://images.unsplash.com/photo-1523217582562-09d0def993a6?auto=format&fit=crop&w=400&q=80',
+  [
+    'https://images.unsplash.com/photo-1512918728675-ed5a9ecdebfd?auto=format&fit=crop&w=800&q=80',
+    'https://images.unsplash.com/photo-1507089947368-19c1da9775ae?auto=format&fit=crop&w=800&q=80',
+    'https://images.unsplash.com/photo-1505691723518-41cb85eea23e?auto=format&fit=crop&w=800&q=80'
+  ],
+  [
+    'https://images.unsplash.com/photo-1494526585095-c41746248156?auto=format&fit=crop&w=800&q=80',
+    'https://images.unsplash.com/photo-1521783988139-893ce2d60a1b?auto=format&fit=crop&w=800&q=80',
+    'https://images.unsplash.com/photo-1470309864661-68328b2cd0a5?auto=format&fit=crop&w=800&q=80'
+  ],
+  [
+    'https://images.unsplash.com/photo-1505691938895-1758d7feb511?auto=format&fit=crop&w=800&q=80',
+    'https://images.unsplash.com/photo-1519710164239-da123dc03ef4?auto=format&fit=crop&w=800&q=80',
+    'https://images.unsplash.com/photo-1480074568708-e7b720bb3f09?auto=format&fit=crop&w=800&q=80'
+  ],
+  [
+    'https://images.unsplash.com/photo-1554995207-c18c203602cb?auto=format&fit=crop&w=800&q=80',
+    'https://images.unsplash.com/photo-1499951360447-b19be8fe80f5?auto=format&fit=crop&w=800&q=80',
+    'https://images.unsplash.com/photo-1505691723518-41cb85eea23e?auto=format&fit=crop&w=800&q=80'
+  ],
+  [
+    'https://images.unsplash.com/photo-1484154218962-a197022b5858?auto=format&fit=crop&w=800&q=80',
+    'https://images.unsplash.com/photo-1484101403633-562f891dc89a?auto=format&fit=crop&w=800&q=80',
+    'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=800&q=80'
+  ],
+  [
+    'https://images.unsplash.com/photo-1501183638710-841dd1904471?auto=format&fit=crop&w=800&q=80',
+    'https://images.unsplash.com/photo-1502673530728-f79b4cab31b1?auto=format&fit=crop&w=800&q=80',
+    'https://images.unsplash.com/photo-1494526585095-c41746248156?auto=format&fit=crop&w=800&q=80'
+  ],
+  [
+    'https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=800&q=80',
+    'https://images.unsplash.com/photo-1496307042754-b4aa456c4a2d?auto=format&fit=crop&w=800&q=80',
+    'https://images.unsplash.com/photo-1519710164239-da123dc03ef4?auto=format&fit=crop&w=800&q=80'
+  ],
+  [
+    'https://images.unsplash.com/photo-1560185127-6ed189bf05b0?auto=format&fit=crop&w=800&q=80',
+    'https://images.unsplash.com/photo-1519710164239-da123dc03ef4?auto=format&fit=crop&w=800&q=80',
+    'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=800&q=80'
+  ],
+  [
+    'https://images.unsplash.com/photo-1568605114967-8130f3a36994?auto=format&fit=crop&w=800&q=80',
+    'https://images.unsplash.com/photo-1505691938895-1758d7feb511?auto=format&fit=crop&w=800&q=80',
+    'https://images.unsplash.com/photo-1519710164239-da123dc03ef4?auto=format&fit=crop&w=800&q=80'
+  ],
 ];
 
 // Header replaced by shared AppHeader
@@ -25,8 +62,26 @@ function Hero() {
         <p>Buy and sell property shares as easily as stocks. Diversify across 100+ properties in 30+ markets starting at just $50. Enjoy instant liquidity and daily rental income.</p>
       </div>
       <div className="hero-images">
-        {propertyImages.map((src, i) => (
-          <img key={i} src={src} alt={`Property ${i + 1}`} className="hero-img" />
+        {propertyImages.map((imgSet, i) => (
+          <img
+            key={i}
+            src={imgSet[0]}
+            alt={`Property ${i + 1}`}
+            className="hero-img"
+            referrerPolicy="no-referrer"
+            loading="lazy"
+            data-attempt="0"
+            onError={(e) => {
+              const attempt = Number(e.currentTarget.getAttribute('data-attempt') || '0');
+              const next = imgSet[attempt + 1];
+              if (next) {
+                e.currentTarget.setAttribute('data-attempt', String(attempt + 1));
+                e.currentTarget.src = next;
+              } else {
+                e.currentTarget.src = 'https://placehold.co/400x300?text=Property';
+              }
+            }}
+          />
         ))}
       </div>
     </section>
