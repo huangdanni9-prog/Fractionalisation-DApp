@@ -524,6 +524,23 @@ export class Web3Client {
     return prop;
   }
 
+  async #assertTokenOwnedByMarketplace(token) {
+    // Ensure the FractionalToken is owned by the Marketplace contract, since
+    // mint/burn operations are restricted to token owner in this architecture.
+    const ownableAbi = [ { inputs: [], name: 'owner', outputs: [{ internalType: 'address', name: '', type: 'address' }], stateMutability: 'view', type: 'function' } ];
+    const code = await this.provider.getCode(token);
+    if (!token || token === ethers.ZeroAddress || code === '0x') {
+      throw new Error('Token address is not a deployed contract. Refresh properties from chain.');
+    }
+    const c = new ethers.Contract(token, ownableAbi, this.provider);
+    const tokenOwner = await c.owner();
+    const mktAddr = await this.getMarketplaceAddress();
+    if (!mktAddr || tokenOwner.toLowerCase() !== mktAddr.toLowerCase()) {
+      throw new Error('Token not owned by Marketplace. Recreate or finalize with correct ownership.');
+    }
+    return true;
+  }
+
   // Primary buy (demo pricing)
   async buyShares({ propertyId, token, amount, pricePerShareWei }) {
     try {
@@ -531,6 +548,7 @@ export class Web3Client {
       const value = ethers.toBigInt(pricePerShareWei) * ethers.toBigInt(amount);
       // Preflight: token matches registry and owner has enough supply to sell on primary
       const prop = await this.#assertRegistryTokenMatches(propertyId, token);
+  await this.#assertTokenOwnedByMarketplace(prop.fractionalToken);
       const ownerBal = await this.#erc20BalanceOf(prop.fractionalToken, prop.propertyOwner);
       if (ownerBal < Number(amount)) {
         throw new Error('Not enough primary supply available to buy this amount. Reduce amount or refresh.');
@@ -551,6 +569,7 @@ export class Web3Client {
       if (!this.marketplace) await this.connect();
       // Preflight: token must be a contract and match registry
       await this.#assertRegistryTokenMatches(propertyId, token);
+  await this.#assertTokenOwnedByMarketplace(String(token));
       const me = await this.getAccount();
       const myBal = await this.#erc20BalanceOf(String(token), me);
       if (myBal < Number(amount)) {
@@ -783,12 +802,19 @@ export class Web3Client {
     }
 
     for (const e of purchases) {
+      // price is per-share; compute total value for convenience
+      const amountShares = e.args[2]?.toString();
+      const priceWei = e.args[3]?.toString();
+      let valueWei = undefined, valueEth = undefined;
+      try { valueWei = (BigInt(priceWei || '0') * BigInt(amountShares || '0')).toString(); valueEth = ethers.formatEther(valueWei); } catch {}
       events.push({
         type: 'buy',
         propertyId: e.args[0]?.toString(),
         user: e.args[1],
-        amount: e.args[2]?.toString(),
-        price: e.args[3]?.toString(),
+        amount: amountShares,
+        price: priceWei,
+        valueWei,
+        valueEth,
         txHash: e.transactionHash,
         blockNumber: e.blockNumber,
         transactionIndex: e.transactionIndex,
@@ -797,12 +823,18 @@ export class Web3Client {
       });
     }
     for (const e of sales) {
+      const amountShares = e.args[2]?.toString();
+      const priceWei = e.args[3]?.toString();
+      let valueWei = undefined, valueEth = undefined;
+      try { valueWei = (BigInt(priceWei || '0') * BigInt(amountShares || '0')).toString(); valueEth = ethers.formatEther(valueWei); } catch {}
       events.push({
         type: 'sell',
         propertyId: e.args[0]?.toString(),
         user: e.args[1],
-        amount: e.args[2]?.toString(),
-        price: e.args[3]?.toString(),
+        amount: amountShares,
+        price: priceWei,
+        valueWei,
+        valueEth,
         txHash: e.transactionHash,
         blockNumber: e.blockNumber,
         transactionIndex: e.transactionIndex,
@@ -837,13 +869,18 @@ export class Web3Client {
           price = listing?.pricePerShareWei?.toString?.() || listing?.[3]?.toString?.();
         }
       } catch {}
+      const amountShares = e.args[2]?.toString();
+      let valueWei = undefined, valueEth = undefined;
+      try { valueWei = (BigInt(price || '0') * BigInt(amountShares || '0')).toString(); valueEth = ethers.formatEther(valueWei); } catch {}
       events.push({
         type: 'buy', // secondary buy
         listingId: e.args[0]?.toString(),
         propertyId: propertyId,
         user: e.args[1],
-        amount: e.args[2]?.toString(),
+        amount: amountShares,
         price: price,
+        valueWei,
+        valueEth,
         txHash: e.transactionHash,
         blockNumber: e.blockNumber,
         transactionIndex: e.transactionIndex,
@@ -853,11 +890,16 @@ export class Web3Client {
     }
     // Dividend claims
     for (const e of claims) {
+      const claimWei = e.args[2]?.toString();
+      let valueEth = undefined;
+      try { valueEth = ethers.formatEther(claimWei || '0'); } catch {}
       events.push({
         type: 'claim',
         propertyId: e.args[0]?.toString(),
         user: e.args[1],
-        amount: e.args[2]?.toString(),
+        amount: claimWei,
+        valueWei: claimWei,
+        valueEth,
         txHash: e.transactionHash,
         blockNumber: e.blockNumber,
         transactionIndex: e.transactionIndex,
@@ -892,12 +934,18 @@ export class Web3Client {
           try { const blk = await this.provider.getBlock(bn); blockMap2.set(bn, blk?.timestamp ? Number(blk.timestamp) * 1000 : undefined); } catch {}
         }
         for (const e of purchases2) {
+          const amountShares = e.args[2]?.toString();
+          const priceWei = e.args[3]?.toString();
+          let valueWei = undefined, valueEth = undefined;
+          try { valueWei = (BigInt(priceWei || '0') * BigInt(amountShares || '0')).toString(); valueEth = ethers.formatEther(valueWei); } catch {}
           events.push({
             type: 'buy',
             propertyId: e.args[0]?.toString(),
             user: e.args[1],
-            amount: e.args[2]?.toString(),
-            price: e.args[3]?.toString(),
+            amount: amountShares,
+            price: priceWei,
+            valueWei,
+            valueEth,
             txHash: e.transactionHash,
             blockNumber: e.blockNumber,
             transactionIndex: e.transactionIndex,
@@ -906,12 +954,18 @@ export class Web3Client {
           });
         }
         for (const e of sales2) {
+          const amountShares = e.args[2]?.toString();
+          const priceWei = e.args[3]?.toString();
+          let valueWei = undefined, valueEth = undefined;
+          try { valueWei = (BigInt(priceWei || '0') * BigInt(amountShares || '0')).toString(); valueEth = ethers.formatEther(valueWei); } catch {}
           events.push({
             type: 'sell',
             propertyId: e.args[0]?.toString(),
             user: e.args[1],
-            amount: e.args[2]?.toString(),
-            price: e.args[3]?.toString(),
+            amount: amountShares,
+            price: priceWei,
+            valueWei,
+            valueEth,
             txHash: e.transactionHash,
             blockNumber: e.blockNumber,
             transactionIndex: e.transactionIndex,
@@ -945,13 +999,18 @@ export class Web3Client {
               price = listing?.pricePerShareWei?.toString?.() || listing?.[3]?.toString?.();
             }
           } catch {}
+          const amountShares = e.args[2]?.toString();
+          let valueWei = undefined, valueEth = undefined;
+          try { valueWei = (BigInt(price || '0') * BigInt(amountShares || '0')).toString(); valueEth = ethers.formatEther(valueWei); } catch {}
           events.push({
             type: 'buy',
             listingId: e.args[0]?.toString(),
             propertyId,
             user: e.args[1],
-            amount: e.args[2]?.toString(),
+            amount: amountShares,
             price,
+            valueWei,
+            valueEth,
             txHash: e.transactionHash,
             blockNumber: e.blockNumber,
             transactionIndex: e.transactionIndex,
@@ -960,11 +1019,16 @@ export class Web3Client {
           });
         }
         for (const e of claims2) {
+          const claimWei = e.args[2]?.toString();
+          let valueEth = undefined;
+          try { valueEth = ethers.formatEther(claimWei || '0'); } catch {}
           events.push({
             type: 'claim',
             propertyId: e.args[0]?.toString(),
             user: e.args[1],
-            amount: e.args[2]?.toString(),
+            amount: claimWei,
+            valueWei: claimWei,
+            valueEth,
             txHash: e.transactionHash,
             blockNumber: e.blockNumber,
             transactionIndex: e.transactionIndex,
