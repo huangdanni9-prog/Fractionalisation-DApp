@@ -1,8 +1,10 @@
 import { ethers } from 'ethers';
 import { networks } from './config';
+import { resolveIpfsUrlToHttp } from './ipfs';
 
 import registryAbi from './abi/PropertyRegistry.json';
 import marketplaceAbi from './abi/Marketplace.json';
+import factoryAbi from './abi/PropertyFactory.json';
 
 export class Web3Client {
   constructor() {
@@ -10,7 +12,8 @@ export class Web3Client {
     this.signer = null;
     this.registry = null;
     this.marketplace = null;
-  this.marketplaceIface = null;
+    this.marketplaceIface = null;
+    this.factory = null;
   }
 
   // Determine desired local dev chain based on available addresses
@@ -94,6 +97,11 @@ export class Web3Client {
     this.registry = new ethers.Contract(cfg.registry, registryAbi, this.signer);
     this.marketplace = new ethers.Contract(cfg.marketplace, marketplaceAbi, this.signer);
     this.marketplaceIface = new ethers.Interface(marketplaceAbi);
+    if (cfg.factory) {
+      this.factory = new ethers.Contract(cfg.factory, factoryAbi, this.signer);
+    } else {
+      this.factory = null;
+    }
 
     // Basic sanity: ensure code exists at marketplace address
     const code = await this.provider.getCode(cfg.marketplace);
@@ -200,6 +208,27 @@ export class Web3Client {
     if (!this.registry) await this.connect();
     try {
       const arr = await this.registry.getAllProperties(start, count);
+      // Parse or fetch metadata to surface title/address/images for UI
+      const parseOrFetchMeta = async (uri) => {
+        try {
+          if (!uri) return null;
+          if (typeof uri === 'string' && uri.startsWith('data:application/json')) {
+            const idx = uri.indexOf(',');
+            const jsonStr = decodeURIComponent(idx >= 0 ? uri.slice(idx + 1) : uri);
+            return JSON.parse(jsonStr);
+          }
+          if (typeof uri === 'string' && (uri.startsWith('ipfs://') || uri.startsWith('http://') || uri.startsWith('https://'))) {
+            const url = resolveIpfsUrlToHttp(uri);
+            const res = await fetch(url, { method: 'GET' });
+            if (res.ok) {
+              const j = await res.json();
+              return j || null;
+            }
+          }
+        } catch {}
+        return null;
+      };
+      const meta = await Promise.all((arr || []).map((p) => parseOrFetchMeta(p.metadataURI)));
       const erc20Abi = [
         { "inputs": [{"internalType":"address","name":"account","type":"address"}], "name":"balanceOf", "outputs":[{"internalType":"uint256","name":"","type":"uint256"}], "stateMutability":"view", "type":"function" },
         { "inputs": [], "name": "totalSupply", "outputs": [ { "internalType": "uint256", "name": "", "type": "uint256" } ], "stateMutability": "view", "type": "function" }
@@ -232,17 +261,31 @@ export class Web3Client {
           }
         }));
       } catch {}
-      return arr.map((p, idx) => ({
-        id: start + idx,
-        metadataURI: p.metadataURI,
-        token: p.fractionalToken,
-        tokenAddress: p.fractionalToken,
-        propertyOwner: p.propertyOwner,
-        totalShares: Number(p.totalShares),
-        availableShares: (balances[idx] !== undefined ? balances[idx] : Number(p.totalShares)) + (listedSupplies[idx] || 0),
-        sharePrice: Number(ethers.formatEther(p.sharePriceWei || 0n)),
-        active: p.active
-      }));
+      return arr.map((p, idx) => {
+        const m = meta[idx] || null;
+        const title = (m?.title || m?.name || '').trim();
+        const addressText = (m?.address || '').trim();
+        const imgs = Array.isArray(m?.images) ? m.images : (m?.image ? [m.image] : []);
+        const resolvedImgs = imgs.map(u => resolveIpfsUrlToHttp(u));
+        return {
+          id: start + idx,
+          metadataURI: p.metadataURI,
+          token: p.fractionalToken,
+          tokenAddress: p.fractionalToken,
+          propertyOwner: p.propertyOwner,
+          totalShares: Number(p.totalShares),
+          availableShares: (balances[idx] !== undefined ? balances[idx] : Number(p.totalShares)) + (listedSupplies[idx] || 0),
+          sharePrice: Number(ethers.formatEther(p.sharePriceWei || 0n)),
+          active: p.active,
+          // UI metadata fallbacks
+          title: title || undefined,
+          address: addressText || undefined,
+          image: resolvedImgs[0] || undefined,
+          images: resolvedImgs.length ? resolvedImgs : undefined,
+          rentalYield: (typeof m?.rentalYield === 'number' || typeof m?.rentalYield === 'string') ? Number(m.rentalYield) : undefined,
+          annualReturn: (typeof m?.annualReturn === 'number' || typeof m?.annualReturn === 'string') ? Number(m.annualReturn) : undefined,
+        };
+      });
     } catch (e) {
       console.error('getProperties failed', e);
       return [];
@@ -944,6 +987,129 @@ export class Web3Client {
       );
     } catch {}
     return events;
+  }
+
+  // Factory helpers
+  async getFactoryAddress() {
+    if (!this.factory) return null;
+    try { return await this.factory.getAddress(); } catch { return null; }
+  }
+
+  async submitListingApplication({ title, addressText, rentalYield, annualReturn, totalShares, sharePriceEth, images, metadataURI }) {
+    if (!this.factory) throw new Error('Factory not configured on this network.');
+    // Build metadata same as Admin.createProperty flow
+    const name = `${title} Shares`;
+    const symbol = (title || '').replace(/[^A-Z0-9]/gi, '').slice(0, 6).toUpperCase() || 'PROP';
+    let uri = String(metadataURI || '');
+    if (!uri) throw new Error('Missing metadataURI');
+    const ts = BigInt(totalShares);
+    const priceWei = ethers.parseEther(String(sharePriceEth));
+    const tx = await this.factory.submitApplication(name, symbol, uri, ts, priceWei);
+    const receipt = await tx.wait();
+    let appId;
+    try {
+      const iface = new ethers.Interface(factoryAbi);
+      for (const log of receipt.logs) {
+        try {
+          const ev = iface.parseLog(log);
+          if (ev && ev.name === 'ApplicationSubmitted') { appId = Number(ev.args[0]); break; }
+        } catch {}
+      }
+    } catch {}
+    return { receipt, appId };
+  }
+
+  async getMyApplications() {
+    if (!this.factory) throw new Error('Factory not configured on this network.');
+    const addr = await this.getAccount();
+    const [arr, ids] = await this.factory.getMyApplications(addr);
+    const list = (arr || []).map((a, i) => ({
+      id: Number((ids && ids[i]) || (i+1)),
+      applicant: a.applicant,
+      name: a.name,
+      symbol: a.symbol,
+      metadataURI: a.metadataURI,
+      totalShares: Number(a.totalShares || 0),
+      sharePriceWei: a.sharePriceWei?.toString?.() || '0',
+      sharePrice: Number(ethers.formatEther(a.sharePriceWei || 0n)),
+      status: Number(a.status || 0),
+      reviewNote: a.reviewNote,
+      createdAt: Number(a.createdAt || 0),
+      decidedAt: Number(a.decidedAt || 0),
+      propertyId: Number(a.propertyId || 0),
+      token: a.token
+    }));
+    return list;
+  }
+
+  async adminGetApplications(start = 1, count = 100) {
+    if (!this.factory) throw new Error('Factory not configured on this network.');
+    const [items, ids, total] = await this.factory.getApplications(start - 1, count); // 1-based in contract view
+    const norm = (items || []).map((a, idx) => ({
+      id: Number((ids && ids[idx]) || (start + idx)),
+      applicant: a.applicant,
+      name: a.name,
+      symbol: a.symbol,
+      metadataURI: a.metadataURI,
+      totalShares: Number(a.totalShares || 0),
+      sharePriceWei: a.sharePriceWei?.toString?.() || '0',
+      sharePrice: Number(ethers.formatEther(a.sharePriceWei || 0n)),
+      status: Number(a.status || 0),
+      reviewNote: a.reviewNote,
+      createdAt: Number(a.createdAt || 0),
+      decidedAt: Number(a.decidedAt || 0),
+      propertyId: Number(a.propertyId || 0),
+      token: a.token
+    }));
+    return { items: norm, total: Number(total || 0) };
+  }
+
+  async reviewApplication(appId, approve, note) {
+    if (!this.factory) throw new Error('Factory not configured on this network.');
+    const tx = await this.factory.reviewApplication(Number(appId), Boolean(approve), String(note || ''));
+    return tx.wait();
+  }
+
+  async finalizeMyApplication(appId) {
+    if (!this.factory) throw new Error('Factory not configured on this network.');
+    const tx = await this.factory.finalizeApprovedApplication(Number(appId));
+    const receipt = await tx.wait();
+    let parsed;
+    try {
+      const iface = new ethers.Interface(factoryAbi);
+      for (const log of receipt.logs) {
+        try {
+          const ev = iface.parseLog(log);
+          if (ev && ev.name === 'ApplicationFinalized') { parsed = { propertyId: Number(ev.args[1]), token: ev.args[2] }; break; }
+        } catch {}
+      }
+    } catch {}
+    return { receipt, ...(parsed || {}) };
+  }
+
+  async setAuthorizedCreator(creator, allowed) {
+    // Marketplace owner only (call wrapper to keep a single admin key)
+    if (!this.marketplace) await this.connect();
+    const [acct, owner] = await Promise.all([ this.getAccount(), this.getMarketplaceOwner() ]);
+    if (owner && acct && owner.toLowerCase() !== acct.toLowerCase()) {
+      throw new Error(`Only marketplace owner can authorize factory. Current: ${acct}, Owner: ${owner}`);
+    }
+    const tx = await this.marketplace.setAuthorizedCreator(creator, Boolean(allowed));
+    return tx.wait();
+  }
+
+  // Factory admin lifecycle: mark a finalized application Removed by propertyId
+  async markApplicationRemovedByProperty(propertyId, note = 'Removed') {
+    if (!this.factory) throw new Error('Factory not configured on this network.');
+    // Only marketplace/registry admin should call this. We require factory.owner == current signer.
+    const acct = await this.getAccount();
+    let owner;
+    try { owner = await this.factory.owner(); } catch {}
+    if (!owner || owner.toLowerCase() !== (acct || '').toLowerCase()) {
+      throw new Error('Only factory owner can mark removed.');
+    }
+    const tx = await this.factory.markRemovedByProperty(Number(propertyId), String(note || 'Removed'));
+    return tx.wait();
   }
 }
 

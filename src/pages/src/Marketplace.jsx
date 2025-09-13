@@ -89,9 +89,19 @@ export default function Marketplace() {
     setUser(userStr ? JSON.parse(userStr) : null);
     // Load properties from localStorage as UI metadata source
     const localProps = getPropertiesSafe();
+    // Attach persisted gallery if missing
+    let propImgMap = {};
+    try { propImgMap = JSON.parse(localStorage.getItem('propertyImages') || '{}'); } catch {}
+    const withImages = (localProps || []).map(lp => {
+      if ((!lp.images || lp.images.length === 0) && propImgMap[String(lp.id)]) {
+        const gallery = propImgMap[String(lp.id)];
+        return { ...lp, image: gallery[0] || lp.image, images: gallery };
+      }
+      return lp;
+    });
   const archivedIds = JSON.parse(localStorage.getItem('archivedPropertyIds') || '[]');
   // Hide locally if archived OR explicitly inactive
-  setProperties((localProps || []).filter(p => !p.archivedLocal && !archivedIds.includes(p.id) && p?.active !== false));
+  setProperties((withImages || []).filter(p => !p.archivedLocal && !archivedIds.includes(p.id) && p?.active !== false));
     // Load from chain and merge
     (async () => {
       try {
@@ -101,24 +111,28 @@ export default function Marketplace() {
         const isZero = (a) => !a || /^0x0{40}$/i.test(a);
         const onchain = (onchainAll || []).filter(cp => cp.active && !archivedIds.includes(cp.id) && !isZero(cp.tokenAddress || cp.token) && Number(cp.totalShares || 0) > 0);
         if (onchain && onchain.length) {
+          // Load persistent gallery fallback map
+          let propertyImages = {};
+          try { propertyImages = JSON.parse(localStorage.getItem('propertyImages') || '{}'); } catch {}
           const merged = onchain.map(cp => {
             const lp = localProps.find(x => x.id === cp.id);
+            const gallery = cp.images || lp?.images || propertyImages[String(cp.id)] || undefined;
             return {
               id: cp.id,
               tokenAddress: cp.tokenAddress || cp.token,
               onchainId: cp.id,
               totalShares: cp.totalShares,
               availableShares: cp.availableShares ?? lp?.availableShares ?? cp.totalShares,
-              sharePrice: cp.sharePrice,
+        sharePrice: cp.sharePrice,
               active: cp.active,
               metadataURI: cp.metadataURI,
               archivedLocal: lp?.archivedLocal || false,
-              title: lp?.title || `Property #${cp.id}`,
-              address: lp?.address || '',
-              image: lp?.image || '',
-              images: lp?.images || undefined,
-              rentalYield: lp?.rentalYield ?? '',
-              annualReturn: lp?.annualReturn ?? ''
+              title: cp.title || lp?.title || `Property #${cp.id}`,
+              address: cp.address || lp?.address || '',
+              image: (gallery && gallery[0]) || cp.image || lp?.image || '',
+              images: gallery,
+              rentalYield: (cp.rentalYield ?? undefined) !== undefined ? cp.rentalYield : (lp?.rentalYield ?? ''),
+              annualReturn: (cp.annualReturn ?? undefined) !== undefined ? cp.annualReturn : (lp?.annualReturn ?? '')
             };
           }).filter(p => !p.archivedLocal);
           setProperties(merged);
@@ -160,24 +174,27 @@ export default function Marketplace() {
       const isZero = (a) => !a || /^0x0{40}$/i.test(a);
       const onchain = (onchainAll || []).filter(cp => cp.active && !archivedIds.includes(cp.id) && !isZero(cp.tokenAddress || cp.token) && Number(cp.totalShares || 0) > 0);
       const localProps = getPropertiesSafe();
+  let propertyImages = {};
+      try { propertyImages = JSON.parse(localStorage.getItem('propertyImages') || '{}'); } catch {}
       const merged = onchain.map(cp => {
         const lp = localProps.find(x => x.id === cp.id);
+        const gallery = cp.images || lp?.images || propertyImages[String(cp.id)] || undefined;
         return {
           id: cp.id,
           tokenAddress: cp.tokenAddress || cp.token,
           onchainId: cp.id,
           totalShares: cp.totalShares,
           availableShares: cp.availableShares ?? lp?.availableShares ?? cp.totalShares,
-          sharePrice: cp.sharePrice,
+      sharePrice: cp.sharePrice,
           active: cp.active,
           metadataURI: cp.metadataURI,
           archivedLocal: lp?.archivedLocal || false,
-          title: lp?.title || `Property #${cp.id}`,
-          address: lp?.address || '',
-          image: lp?.image || '',
-          images: lp?.images || undefined,
-          rentalYield: lp?.rentalYield ?? '',
-          annualReturn: lp?.annualReturn ?? ''
+          title: cp.title || lp?.title || `Property #${cp.id}`,
+          address: cp.address || lp?.address || '',
+          image: (gallery && gallery[0]) || cp.image || lp?.image || '',
+          images: gallery,
+          rentalYield: (cp.rentalYield ?? undefined) !== undefined ? cp.rentalYield : (lp?.rentalYield ?? ''),
+          annualReturn: (cp.annualReturn ?? undefined) !== undefined ? cp.annualReturn : (lp?.annualReturn ?? '')
         };
       }).filter(p => !p.archivedLocal);
       setProperties(merged);

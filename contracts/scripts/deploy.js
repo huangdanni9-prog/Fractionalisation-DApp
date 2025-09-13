@@ -27,6 +27,20 @@ async function main() {
   await txOwn.wait();
   console.log('Transferred registry ownership to Marketplace');
 
+  // Deploy PropertyFactory and authorize it as a creator in the registry
+  const Factory = await hre.ethers.getContractFactory('contracts/core/PropertyFactory.sol:PropertyFactory');
+  const factory = await Factory.deploy(deployer.address, registry);
+  await factory.waitForDeployment();
+  console.log('PropertyFactory:', await factory.getAddress());
+  // Authorize factory via Marketplace owner wrapper to simplify UX
+  try {
+    const txAuth = await marketplace.setAuthorizedCreator(await factory.getAddress(), true);
+    await txAuth.wait();
+    console.log('Authorized PropertyFactory in Registry');
+  } catch (e) {
+    console.warn('Failed to authorize factory in registry:', e?.message || e);
+  }
+
   // Example: create a property (optional demo)
   // const tx = await marketplace.createProperty(
   //   'Damansara Villa Shares',
@@ -45,11 +59,12 @@ async function main() {
     const netKey = isLocal ? 'local' : (network === 'sepolia' ? 'sepolia' : network);
     const pagesDir = path.resolve(__dirname, '../../src/pages/src/web3');
     const addrPath = path.join(pagesDir, 'addresses.json');
-    let json = { local: { registry: '', marketplace: '' }, sepolia: { registry: '', marketplace: '' } };
+    let json = { local: { registry: '', marketplace: '', factory: '' }, sepolia: { registry: '', marketplace: '', factory: '' } };
     try { json = JSON.parse(fs.readFileSync(addrPath, 'utf8')); } catch {}
     json[netKey] = {
       registry: await registry.getAddress(),
       marketplace: await marketplace.getAddress(),
+      factory: await factory.getAddress(),
     };
     fs.writeFileSync(addrPath, JSON.stringify(json, null, 2));
     console.log('Wrote frontend addresses.json for', netKey, json[netKey]);

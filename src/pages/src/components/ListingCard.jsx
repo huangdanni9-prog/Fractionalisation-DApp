@@ -1,8 +1,19 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { resolveIpfsUrlToHttp } from '../web3/ipfs';
 
 export default function ListingCard({ p, onOpen }) {
   const [loaded, setLoaded] = useState(false);
-  const imgs = Array.isArray(p.images) && p.images.length ? p.images : (p.image ? [p.image] : []);
+  let imgsRaw = Array.isArray(p.images) && p.images.length ? p.images : (p.image ? [p.image] : []);
+  // Last-resort: pull from persisted map if missing
+  if (!imgsRaw || imgsRaw.length === 0) {
+    try {
+      const map = JSON.parse(localStorage.getItem('propertyImages') || '{}');
+      const fallback = map?.[String(p.id)];
+      if (Array.isArray(fallback) && fallback.length) imgsRaw = fallback;
+    } catch {}
+  }
+  // Normalize image URLs: resolve ipfs:// and keep data: as-is
+  const imgs = useMemo(() => (imgsRaw || []).map(u => resolveIpfsUrlToHttp(u)), [imgsRaw]);
   const [idx, setIdx] = useState(0);
   useEffect(() => { setLoaded(false); }, [idx]);
   const hasNumber = (v) => v !== undefined && v !== null && String(v).trim() !== '' && !Number.isNaN(Number(v));
@@ -25,6 +36,17 @@ export default function ListingCard({ p, onOpen }) {
             alt={p.title || `Property #${p.id}`}
             loading="lazy"
             onLoad={()=>setLoaded(true)}
+            onError={(e)=>{
+              // Fallback: if IPFS gateway has issues, try a secondary public gateway
+              try {
+                const el = e.currentTarget;
+                const src = String(el?.src || '');
+                if (src.includes('/ipfs/')) {
+                  const alt = src.replace('https://ipfs.io/ipfs/', 'https://cloudflare-ipfs.com/ipfs/');
+                  if (alt !== src) el.src = alt;
+                }
+              } catch {}
+            }}
             className="h-full w-full object-cover"
           />
         )}

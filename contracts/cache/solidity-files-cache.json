@@ -1,9 +1,9 @@
 {
   "_format": "hh-sol-cache-2",
   "files": {
-    "C:\\Users\\user\\Desktop\\Project\\Fractionalisation-DApp\\contracts\\contracts\\core\\Marketplace.sol": {
-      "lastModificationDate": 1757556950811,
-      "contentHash": "f579e89a719138657768c713ecbd8426",
+    "C:\\Users\\User\\OneDrive\\Desktop\\Blockchain\\Fractionalisation-DApp\\contracts\\contracts\\core\\Marketplace.sol": {
+      "lastModificationDate": 1757742564586,
+      "contentHash": "67e04e61d544c19fc61469afb323c690",
       "sourceName": "contracts/core/Marketplace.sol",
       "solcConfig": {
         "version": "0.8.20",
@@ -42,9 +42,9 @@
         "Marketplace"
       ]
     },
-    "C:\\Users\\user\\Desktop\\Project\\Fractionalisation-DApp\\contracts\\contracts\\core\\PropertyRegistry.sol": {
-      "lastModificationDate": 1757423642984,
-      "contentHash": "7a683329c0968c6ea5484f6c654c143e",
+    "C:\\Users\\User\\OneDrive\\Desktop\\Blockchain\\Fractionalisation-DApp\\contracts\\contracts\\core\\PropertyRegistry.sol": {
+      "lastModificationDate": 1757749775510,
+      "contentHash": "34e397ed14f86234f14d25909d0c48e6",
       "sourceName": "contracts/core/PropertyRegistry.sol",
       "solcConfig": {
         "version": "0.8.20",
@@ -81,9 +81,9 @@
         "PropertyRegistry"
       ]
     },
-    "C:\\Users\\user\\Desktop\\Project\\Fractionalisation-DApp\\contracts\\tokens\\FractionalToken.sol": {
-      "lastModificationDate": 1757402977306,
-      "contentHash": "410e74375227b67812908ea020da571f",
+    "C:\\Users\\User\\OneDrive\\Desktop\\Blockchain\\Fractionalisation-DApp\\contracts\\tokens\\FractionalToken.sol": {
+      "lastModificationDate": 1757749775458,
+      "contentHash": "c7507849087d9578a1bd2dc59c6fa3d4",
       "sourceName": "tokens/FractionalToken.sol",
       "solcConfig": {
         "version": "0.8.20",
@@ -120,8 +120,8 @@
         "FractionalToken"
       ]
     },
-    "C:\\Users\\user\\Desktop\\Project\\Fractionalisation-DApp\\contracts\\node_modules\\@openzeppelin\\contracts\\access\\Ownable.sol": {
-      "lastModificationDate": 1757405948549,
+    "C:\\Users\\User\\OneDrive\\Desktop\\Blockchain\\Fractionalisation-DApp\\contracts\\node_modules\\@openzeppelin\\contracts\\access\\Ownable.sol": {
+      "lastModificationDate": 1757749775480,
       "contentHash": "d3c790edc9ccf808a17c5a6cd13614fd",
       "sourceName": "@openzeppelin/contracts/access/Ownable.sol",
       "solcConfig": {
@@ -158,8 +158,8 @@
         "Ownable"
       ]
     },
-    "C:\\Users\\user\\Desktop\\Project\\Fractionalisation-DApp\\contracts\\node_modules\\@openzeppelin\\contracts\\utils\\ReentrancyGuard.sol": {
-      "lastModificationDate": 1757405948557,
+    "C:\\Users\\User\\OneDrive\\Desktop\\Blockchain\\Fractionalisation-DApp\\contracts\\node_modules\\@openzeppelin\\contracts\\utils\\ReentrancyGuard.sol": {
+      "lastModificationDate": 1757749775484,
       "contentHash": "190613e556d509d9e9a0ea43dc5d891d",
       "sourceName": "@openzeppelin/contracts/utils/ReentrancyGuard.sol",
       "solcConfig": {
@@ -194,8 +194,8 @@
         "ReentrancyGuard"
       ]
     },
-    "C:\\Users\\user\\Desktop\\Project\\Fractionalisation-DApp\\contracts\\node_modules\\@openzeppelin\\contracts\\utils\\Context.sol": {
-      "lastModificationDate": 1757405948385,
+    "C:\\Users\\User\\OneDrive\\Desktop\\Blockchain\\Fractionalisation-DApp\\contracts\\node_modules\\@openzeppelin\\contracts\\utils\\Context.sol": {
+      "lastModificationDate": 1757749775496,
       "contentHash": "67bfbc07588eb8683b3fd8f6f909563e",
       "sourceName": "@openzeppelin/contracts/utils/Context.sol",
       "solcConfig": {
@@ -230,8 +230,8 @@
         "Context"
       ]
     },
-    "C:\\Users\\user\\Desktop\\Project\\Fractionalisation-DApp\\contracts\\node_modules\\@openzeppelin\\contracts\\token\\ERC20\\ERC20.sol": {
-      "lastModificationDate": 1757405948441,
+    "C:\\Users\\User\\OneDrive\\Desktop\\Blockchain\\Fractionalisation-DApp\\contracts\\node_modules\\@openzeppelin\\contracts\\token\\ERC20\\ERC20.sol": {
+      "lastModificationDate": 1757749775490,
       "contentHash": "59dfce11284f2636db261df9b6a18f81",
       "sourceName": "@openzeppelin/contracts/token/ERC20/ERC20.sol",
       "solcConfig": {
@@ -271,8 +271,8 @@
         "ERC20"
       ]
     },
-    "C:\\Users\\user\\Desktop\\Project\\Fractionalisation-DApp\\contracts\\node_modules\\@openzeppelin\\contracts\\interfaces\\draft-IERC6093.sol": {
-      "lastModificationDate": 1757405948413,
+    "C:\\Users\\User\\OneDrive\\Desktop\\Blockchain\\Fractionalisation-DApp\\contracts\\node_modules\\@openzeppelin\\contracts\\interfaces\\draft-IERC6093.sol": {
+      "lastModificationDate": 1757749775549,
       "contentHash": "5041977bbe908de2e6ed0270447f79ad",
       "sourceName": "@openzeppelin/contracts/interfaces/draft-IERC6093.sol",
       "solcConfig": {
@@ -309,8 +309,8 @@
         "IERC721Errors"
       ]
     },
-    "C:\\Users\\user\\Desktop\\Project\\Fractionalisation-DApp\\contracts\\node_modules\\@openzeppelin\\contracts\\token\\ERC20\\IERC20.sol": {
-      "lastModificationDate": 1757405948514,
+    "C:\\Users\\User\\OneDrive\\Desktop\\Blockchain\\Fractionalisation-DApp\\contracts\\node_modules\\@openzeppelin\\contracts\\token\\ERC20\\IERC20.sol": {
+      "lastModificationDate": 1757749775549,
       "contentHash": "9261adf6457863de3e9892f51317ec89",
       "sourceName": "@openzeppelin/contracts/token/ERC20/IERC20.sol",
       "solcConfig": {
@@ -345,8 +345,8 @@
         "IERC20"
       ]
     },
-    "C:\\Users\\user\\Desktop\\Project\\Fractionalisation-DApp\\contracts\\node_modules\\@openzeppelin\\contracts\\token\\ERC20\\extensions\\IERC20Metadata.sol": {
-      "lastModificationDate": 1757405948517,
+    "C:\\Users\\User\\OneDrive\\Desktop\\Blockchain\\Fractionalisation-DApp\\contracts\\node_modules\\@openzeppelin\\contracts\\token\\ERC20\\extensions\\IERC20Metadata.sol": {
+      "lastModificationDate": 1757680982586,
       "contentHash": "513778b30d2750f5d2b9b19bbcf748a5",
       "sourceName": "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol",
       "solcConfig": {
@@ -383,9 +383,50 @@
         "IERC20Metadata"
       ]
     },
-    "C:\\Users\\user\\Desktop\\Project\\Fractionalisation-DApp\\contracts\\contracts\\Temp.sol": {
-      "lastModificationDate": 1757406033167,
-      "contentHash": "0a32b141bb8ce3ddbd84d5f53d048531",
+    "C:\\Users\\User\\OneDrive\\Desktop\\Blockchain\\Fractionalisation-DApp\\contracts\\contracts\\core\\PropertyFactory.sol": {
+      "lastModificationDate": 1757749774666,
+      "contentHash": "8d209659e9df8f9efa2ea447b0c09f93",
+      "sourceName": "contracts/core/PropertyFactory.sol",
+      "solcConfig": {
+        "version": "0.8.20",
+        "settings": {
+          "evmVersion": "paris",
+          "optimizer": {
+            "enabled": false,
+            "runs": 200
+          },
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "@openzeppelin/contracts/access/Ownable.sol",
+        "@openzeppelin/contracts/utils/ReentrancyGuard.sol",
+        "./PropertyRegistry.sol",
+        "../../tokens/FractionalToken.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.20"
+      ],
+      "artifacts": [
+        "PropertyFactory"
+      ]
+    },
+    "C:\\Users\\User\\OneDrive\\Desktop\\Blockchain\\Fractionalisation-DApp\\contracts\\contracts\\Temp.sol": {
+      "lastModificationDate": 1757750093225,
+      "contentHash": "9a9d360d0d3be7f664921f946aa9110e",
       "sourceName": "contracts/Temp.sol",
       "solcConfig": {
         "version": "0.8.20",

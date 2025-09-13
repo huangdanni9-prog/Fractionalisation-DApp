@@ -55,12 +55,19 @@ function useProperty(propertyId) {
         // Local cache fallback (for images/title/address) when metadata is minimal (non-IPFS path)
         const localProps = JSON.parse(localStorage.getItem('properties') || '[]');
         const lp = localProps.find((p) => String(p.id) === String(hit.id));
+        // Persisted lightweight gallery fallback (compressed thumbnails) per propertyId
+        let propImagesMap = {};
+        try { propImagesMap = JSON.parse(localStorage.getItem('propertyImages') || '{}'); } catch {}
+        const persistedGallery = propImagesMap[String(hit.id)] || [];
         const title = (meta?.name || meta?.title || attr(meta, 'title') || lp?.title || `Property #${hit.id}`);
         const address = (meta?.address || attr(meta, 'address') || lp?.address || '');
         const imageMeta = resolveIpfs(meta?.image || attr(meta, 'image'));
         const images = Array.isArray(meta?.images)
           ? meta.images.map(resolveIpfs)
-          : (lp?.images && lp.images.length ? lp.images : (imageMeta ? [imageMeta] : []));
+          : (lp?.images && lp.images.length
+              ? lp.images
+              : (persistedGallery.length ? persistedGallery : (imageMeta ? [imageMeta] : []))
+            );
         const image = images.length ? images[0] : (lp?.image || imageMeta || undefined);
         const rentalYield = Number(attr(meta, 'rentalYield') ?? meta?.rentalYield ?? '') || '';
         const annualReturn = Number(attr(meta, 'annualReturn') ?? meta?.annualReturn ?? '') || '';

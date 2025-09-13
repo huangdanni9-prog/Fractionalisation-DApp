@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import Home from './Home';
 import Marketplace from './Marketplace';
 import AboutUs from './AboutUs';
+import Submit from './Submit';
 import Login from './Login';
 import Register from './Register';
 import Profile from './Profile';
@@ -28,6 +29,7 @@ function App() {
           <Route path="/register" element={<Register />} />
           <Route path="/profile" element={<Profile />} />
           <Route path="/admin" element={<OwnerGate><Admin /></OwnerGate>} />
+          <Route path="/submit" element={<Submit />} />
         </Routes>
       </Router>
     </QueryClientProvider>

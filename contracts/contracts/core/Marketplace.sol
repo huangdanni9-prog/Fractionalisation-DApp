@@ -181,4 +181,9 @@ contract Marketplace is Ownable, ReentrancyGuard {
     function setPropertyActive(uint256 propertyId, bool active) external onlyOwner {
         registry.setPropertyActive(propertyId, active);
     }
+
+    // Admin: authorize/deauthorize external creators (e.g., PropertyFactory) in the registry
+    function setAuthorizedCreator(address creator, bool allowed) external onlyOwner {
+        registry.setAuthorizedCreator(creator, allowed);
+    }
 }

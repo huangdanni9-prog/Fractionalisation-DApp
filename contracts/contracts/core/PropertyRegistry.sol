@@ -19,6 +19,8 @@ contract PropertyRegistry is Ownable {
 
     uint256 public nextPropertyId;
     mapping(uint256 => Property) public properties;
+    // Allow external factories/forwarders to create properties in addition to the owner (e.g., Marketplace-owned registry).
+    mapping(address => bool) public authorizedCreators;
 
     event PropertyCreated(uint256 indexed propertyId, address indexed token, uint256 totalShares, uint256 sharePriceWei, address owner, string metadataURI);
     event PropertyStatusChanged(uint256 indexed propertyId, bool active);
@@ -33,7 +35,9 @@ contract PropertyRegistry is Ownable {
         uint256 totalShares,
         uint256 sharePriceWei,
         address propertyOwner
-    ) external onlyOwner returns (uint256 propertyId) {
+    ) external returns (uint256 propertyId) {
+        // Allow calls from contract owner OR an authorized creator (e.g., a Factory contract)
+        require(msg.sender == owner() || authorizedCreators[msg.sender], "NOT_AUTHORIZED");
         require(fractionalToken != address(0), "INVALID_TOKEN");
         propertyId = nextPropertyId;
         properties[propertyId] = Property({
@@ -46,6 +50,11 @@ contract PropertyRegistry is Ownable {
         });
         nextPropertyId = propertyId + 1;
         emit PropertyCreated(propertyId, fractionalToken, totalShares, sharePriceWei, propertyOwner, metadataURI);
+    }
+
+    // Owner can authorize/deauthorize external creators (e.g., PropertyFactory) to call createProperty.
+    function setAuthorizedCreator(address creator, bool allowed) external onlyOwner {
+        authorizedCreators[creator] = allowed;
     }
 
     function setPropertyActive(uint256 propertyId, bool active) external onlyOwner {

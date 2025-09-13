@@ -95,6 +95,9 @@ export default function AppHeader({ user }) {
           {(account || location.pathname.startsWith('/profile')) && (
             <Link to="/profile" className="text-gray-700 hover:text-violet-700">Profile</Link>
           )}
+          {account && (
+            <Link to="/submit" className="text-gray-700 hover:text-violet-700">Submit Property</Link>
+          )}
           {isOwner && (
             <Link to="/admin" className="text-gray-700 hover:text-violet-700">Admin</Link>
           )}
