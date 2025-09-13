@@ -502,16 +502,69 @@ export class Web3Client {
     return { receipt, ...(parsed || {}) };
   }
 
+  // --- Helpers for preflight checks ---
+  async #erc20BalanceOf(token, account) {
+    const erc20Abi = [
+      { inputs: [{ internalType: 'address', name: 'account', type: 'address' }], name: 'balanceOf', outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
+    ];
+    const code = await this.provider.getCode(token);
+    if (!token || token === ethers.ZeroAddress || code === '0x') {
+      throw new Error('Token address is not a deployed contract. Refresh properties from chain.');
+    }
+    const c = new ethers.Contract(token, erc20Abi, this.provider);
+    const bal = await c.balanceOf(account);
+    return Number(bal);
+  }
+
+  async #assertRegistryTokenMatches(propertyId, token) {
+    const prop = await this.registry.getProperty(Number(propertyId));
+    if (!prop || !prop.fractionalToken || prop.fractionalToken.toLowerCase() !== String(token).toLowerCase()) {
+      throw new Error('Selected token does not match the property’s token. Click Refresh (on-chain).');
+    }
+    return prop;
+  }
+
   // Primary buy (demo pricing)
   async buyShares({ propertyId, token, amount, pricePerShareWei }) {
-    const value = ethers.toBigInt(pricePerShareWei) * ethers.toBigInt(amount);
-    const tx = await this.marketplace.buyShares(propertyId, token, amount, pricePerShareWei, { value });
-    return tx.wait();
+    try {
+      if (!this.marketplace) await this.connect();
+      const value = ethers.toBigInt(pricePerShareWei) * ethers.toBigInt(amount);
+      // Preflight: token matches registry and owner has enough supply to sell on primary
+      const prop = await this.#assertRegistryTokenMatches(propertyId, token);
+      const ownerBal = await this.#erc20BalanceOf(prop.fractionalToken, prop.propertyOwner);
+      if (ownerBal < Number(amount)) {
+        throw new Error('Not enough primary supply available to buy this amount. Reduce amount or refresh.');
+      }
+      const tx = await this.marketplace.buyShares(Number(propertyId), String(token), Number(amount), ethers.toBigInt(pricePerShareWei), { value });
+      return await tx.wait();
+    } catch (e) {
+      const msg = String(e?.message || '');
+      if (/missing revert data/i.test(msg)) {
+        throw new Error('Transaction would revert (no revert reason). Likely causes: wrong token address, stale cache, or incorrect price/value. Click Refresh (on-chain) and try again.');
+      }
+      throw e;
+    }
   }
 
   async createListing({ token, propertyId, amount, pricePerShareWei }) {
-    const tx = await this.marketplace.createListing(token, propertyId, amount, pricePerShareWei);
-    return tx.wait();
+    try {
+      if (!this.marketplace) await this.connect();
+      // Preflight: token must be a contract and match registry
+      await this.#assertRegistryTokenMatches(propertyId, token);
+      const me = await this.getAccount();
+      const myBal = await this.#erc20BalanceOf(String(token), me);
+      if (myBal < Number(amount)) {
+        throw new Error('You do not own enough shares to create this listing.');
+      }
+      const tx = await this.marketplace.createListing(String(token), Number(propertyId), Number(amount), ethers.toBigInt(pricePerShareWei));
+      return await tx.wait();
+    } catch (e) {
+      const msg = String(e?.message || '');
+      if (/missing revert data/i.test(msg)) {
+        throw new Error('Create listing failed during gas estimation. Ensure you own the shares and the token address is correct (Refresh on-chain).');
+      }
+      throw e;
+    }
   }
 
   async fillListing({ token, listingId, amount, pricePerShareWei }) {

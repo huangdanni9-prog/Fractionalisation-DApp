@@ -109,6 +109,11 @@ contract PropertyFactory is Ownable, ReentrancyGuard {
         // Deploy ERC20 and mint total to applicant (owner of tokens)
         FractionalToken ft = new FractionalToken(a.name, a.symbol, address(this));
         ft.mint(a.applicant, a.totalShares);
+    // IMPORTANT: Transfer token ownership to Marketplace (owner of Registry)
+    // so the Marketplace can burn/mint during buys, listings, and fills.
+    // On this architecture, the Marketplace contract must own the token.
+    address marketplaceAddr = registry.owner();
+    ft.transferOwnership(marketplaceAddr);
         // Create registry record (requires factory to be authorized creator)
         propertyId = registry.createProperty(a.metadataURI, address(ft), a.totalShares, a.sharePriceWei, a.applicant);
         token = address(ft);

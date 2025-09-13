@@ -4,6 +4,7 @@ import './Home.css';
 import AppHeader from './components/AppHeader';
 import Carousel from './components/Carousel';
 import { getPropertiesSafe } from './utils/safeLocalStorage';
+import { resolveIpfsUrlToHttp } from './web3/ipfs';
 
 // 9 fixed real-estate photos with two backups each (multi-fallback)
 const propertyImages = [
@@ -94,13 +95,35 @@ function TopProperties() {
   const [properties, setProperties] = useState([]);
 
   useEffect(() => {
-    const props = getPropertiesSafe();
-    const archivedIds = JSON.parse(localStorage.getItem('archivedPropertyIds') || '[]');
-    // Exclude locally archived, globally archived, and inactive items if active flag exists
-    const active = props.filter(p => !p.archivedLocal && !archivedIds.includes(p.id) && (p.active === undefined || p.active));
-    if (active.length === 0) return setProperties([]);
-    const sorted = [...active].sort((a, b) => (Number(b.rentalYield || 0) + Number(b.annualReturn || 0)) - (Number(a.rentalYield || 0) + Number(a.annualReturn || 0)));
-    setProperties(sorted);
+    const reload = () => {
+      const props = getPropertiesSafe();
+      const archivedIds = JSON.parse(localStorage.getItem('archivedPropertyIds') || '[]');
+      const active = props.filter(p => !p.archivedLocal && !archivedIds.includes(p.id) && (p.active === undefined || p.active));
+      let galleryMap = {};
+      try { galleryMap = JSON.parse(localStorage.getItem('propertyImages') || '{}'); } catch {}
+      const enriched = active.map(p => {
+        const gallery = Array.isArray(p.images) && p.images.length ? p.images : (galleryMap[String(p.id)] || []);
+        const g2 = Array.isArray(gallery) ? gallery.map(u => resolveIpfsUrlToHttp(u)) : [];
+        const imgRaw = p.image || (g2.length ? g2[0] : '');
+        const img = resolveIpfsUrlToHttp(imgRaw);
+        return { ...p, image: img, images: g2.length ? g2 : p.images };
+      });
+      if (enriched.length === 0) { setProperties([]); return; }
+      const sorted = [...enriched].sort((a, b) => (Number(b.rentalYield || 0) + Number(b.annualReturn || 0)) - (Number(a.rentalYield || 0) + Number(a.annualReturn || 0)));
+      setProperties(sorted);
+    };
+    reload();
+    const onFocus = () => reload();
+    const onStorage = (e) => {
+      if (!e || !e.key) return reload();
+      if (['properties', 'propertyImages', 'archivedPropertyIds'].includes(e.key)) reload();
+    };
+    window.addEventListener('focus', onFocus);
+    window.addEventListener('storage', onStorage);
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      window.removeEventListener('storage', onStorage);
+    };
   }, []);
 
   if (!properties.length) {
@@ -115,7 +138,7 @@ function TopProperties() {
         className="product-img"
         referrerPolicy="no-referrer"
         loading="lazy"
-        onError={(e) => { e.currentTarget.src = 'https://placehold.co/600x400?text=Property'; }}
+  onError={(e) => { e.currentTarget.src = 'https://placehold.co/600x400?text=Property'; }}
       />
       <div className="product-info">
         <div>

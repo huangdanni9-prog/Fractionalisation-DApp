@@ -12,7 +12,7 @@ import {FractionalToken} from "../tokens/FractionalToken.sol";
 /// finalize to deploy the token, mint total supply to themselves (owner), and create the
 /// registry entry. Images and details live in metadataURI (IPFS recommended).
 contract PropertyFactory is Ownable, ReentrancyGuard {
-    enum Status { Pending, Approved, Rejected, Finalized }
+    enum Status { Pending, Approved, Rejected, Finalized, Removed }
 
     struct Application {
         address applicant; // wallet who submitted and will own the property tokens
@@ -36,10 +36,13 @@ contract PropertyFactory is Ownable, ReentrancyGuard {
     mapping(uint256 => Application) public applications; // appId => application
     // Per-applicant index for history
     mapping(address => uint256[]) private userApps; // applicant => appIds (append-only)
+    // Link finalized properties back to their application for lifecycle updates
+    mapping(uint256 => uint256) public propertyToAppId; // propertyId => appId
 
     event ApplicationSubmitted(uint256 indexed appId, address indexed applicant, string name, string symbol);
     event ApplicationReviewed(uint256 indexed appId, Status status, string note);
     event ApplicationFinalized(uint256 indexed appId, uint256 indexed propertyId, address token);
+    event ApplicationMarkedRemoved(uint256 indexed appId, uint256 indexed propertyId, string note);
 
     constructor(address initialOwner, PropertyRegistry _registry) Ownable(initialOwner) {
         registry = _registry;
@@ -106,13 +109,30 @@ contract PropertyFactory is Ownable, ReentrancyGuard {
         // Deploy ERC20 and mint total to applicant (owner of tokens)
         FractionalToken ft = new FractionalToken(a.name, a.symbol, address(this));
         ft.mint(a.applicant, a.totalShares);
+        // Transfer token ownership to Marketplace (registry owner) so trading flows can mint/burn
+        address marketplaceOwner = registry.owner();
+        ft.transferOwnership(marketplaceOwner);
         // Create registry record (requires factory to be authorized creator)
         propertyId = registry.createProperty(a.metadataURI, address(ft), a.totalShares, a.sharePriceWei, a.applicant);
         token = address(ft);
         a.status = Status.Finalized;
         a.propertyId = propertyId;
         a.token = token;
+        propertyToAppId[propertyId] = appId;
         emit ApplicationFinalized(appId, propertyId, token);
+    }
+
+    /// @notice Admin helper to mark the originating application as Removed when a property is deactivated externally.
+    function markRemovedByProperty(uint256 propertyId, string calldata note) external onlyOwner {
+        uint256 appId = propertyToAppId[propertyId];
+        require(appId != 0, "NO_APP_FOR_PROPERTY");
+        Application storage a = applications[appId];
+        // Only allow transition if it was finalized previously
+        require(a.status == Status.Finalized, "NOT_FINALIZED");
+        a.status = Status.Removed;
+        a.reviewNote = note;
+        a.decidedAt = block.timestamp;
+        emit ApplicationMarkedRemoved(appId, propertyId, note);
     }
 
     // -------- Admin views --------
