@@ -300,15 +300,3 @@ Fractionalisation-DAPP/
 ```
 
 ---
-
-## Troubleshooting
-
-| Problem | Solution |
-|---------|----------|
-| **Port 8545 already in use** | Stop the other process, or the script handles it automatically |
-| **Contracts not found in frontend** | Re-run `npm run deploy:ganache` — addresses in `addresses.json` must match the running chain |
-| **MetaMask "Nonce too high"** | Reset MetaMask account: Settings → Advanced → Clear activity tab data |
-| **Ganache did not start in 30 s** | Check if Node.js and Ganache are installed. Run `npm run chain` manually in `contracts/` |
-| **401 from web3.storage** | Set `VITE_WEB3_STORAGE_TOKEN` in `src/pages/.env` |
-| **QuotaExceededError in browser** | Clear local cache via Marketplace's refresh button, or clear `properties` key from browser localStorage |
-| **Stale data after chain restart** | Redeploy contracts (step 3) and clear browser localStorage |
