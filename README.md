@@ -77,28 +77,28 @@ User submits property ──► PropertyFactory (application)
 
 ```
 ┌──────────────────────────────────────────────────┐
-│                   Frontend (Vite)                 │
+│                   Frontend (Vite)                │
 │  React 19  ·  React Router  ·  Tailwind CSS      │
 │  ethers.js v6  ·  Chart.js  ·  React Query       │
-│              http://localhost:5173                 │
+│              http://localhost:5173               │
 └──────────────────────┬───────────────────────────┘
                        │ JSON-RPC (ethers.js)
                        ▼
 ┌──────────────────────────────────────────────────┐
-│            Ganache Local Blockchain               │
-│           http://127.0.0.1:8545                   │
-│                Chain ID 1337                      │
-│                                                   │
-│  ┌──────────────┐  ┌────────────────────────┐     │
-│  │ Property     │  │ PropertyFactory        │     │
-│  │ Registry     │◄─┤ (application workflow) │     │
-│  └──────┬───────┘  └────────────────────────┘     │
-│         │                                         │
-│  ┌──────┴───────┐  ┌────────────────────────┐     │
-│  │ Marketplace  │──┤ FractionalToken (ERC20)│     │
-│  │ (buy/sell/   │  │ (one per property)     │     │
-│  │  dividends)  │  └────────────────────────┘     │
-│  └──────────────┘                                 │
+│            Ganache Local Blockchain              │
+│           http://127.0.0.1:8545                  │
+│                Chain ID 1337                     │
+│                                                  │
+│  ┌──────────────┐  ┌────────────────────────┐    │
+│  │ Property     │  │ PropertyFactory        │    │
+│  │ Registry     │◄─┤ (application workflow) │    │
+│  └──────┬───────┘  └────────────────────────┘    │
+│         │                                        │
+│  ┌──────┴───────┐  ┌────────────────────────┐    │
+│  │ Marketplace  │──┤ FractionalToken (ERC20)│    │
+│  │ (buy/sell/   │  │ (one per property)     │    │
+│  │  dividends)  │  └────────────────────────┘    │
+│  └──────────────┘                                │
 └──────────────────────────────────────────────────┘
 ```
 
