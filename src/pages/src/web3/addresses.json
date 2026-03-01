@@ -10,8 +10,8 @@
     "factory": ""
   },
   "ganache": {
-    "registry": "0xc8CA17301F1dfebB3A99BB1C75F898bb82b59E91",
-    "marketplace": "0x3ebE132E97fb6a83b0b70521f4ac346571075C71",
-    "factory": "0x5b90FE723580C1AF77A740EC21a0d1E2D955CbAE"
+    "registry": "0xb67ff5d57b0050952eedC193F950d78612B159d4",
+    "marketplace": "0x61e39DBdd1862bD6fa7174023c3eb7d437c34b65",
+    "factory": "0xb0Eb1D7B7465Db67944701c5203aEfA2fa0ec3Bd"
   }
 }
